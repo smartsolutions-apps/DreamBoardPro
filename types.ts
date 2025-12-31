@@ -1,0 +1,100 @@
+export interface SceneVersion {
+  id: string;
+  imageUrl: string;
+  prompt: string;
+  timestamp: number;
+}
+
+export type SceneFilter = 'none' | 'sepia' | 'grayscale' | 'contrast' | 'vivid' | 'noir' | 'warm' | 'cool';
+
+export type SceneTransition = 'Cut' | 'Fade In' | 'Fade Out' | 'Dissolve' | 'Wipe Left' | 'Wipe Right' | 'Zoom In';
+
+export type TextStyle = 'Standard' | 'Outline' | 'Shadow' | 'Neon' | 'Retro' | 'Glitch' | 'Cinema';
+
+export interface StoryScene {
+  id: string;
+  title?: string;
+  prompt: string;
+  imageUrl?: string;
+  videoUrl?: string; // For Veo generated video
+  audioUrl?: string; // For TTS narration
+  referenceImage?: string;
+  shotType?: ShotType;
+  filter?: SceneFilter;
+  transition?: SceneTransition;
+  textStyle?: TextStyle;
+  tags?: string[];
+  isLoading: boolean;
+  isVideoLoading?: boolean;
+  isAudioLoading?: boolean;
+  error?: string;
+  versions: SceneVersion[];
+}
+
+export interface SceneTemplate {
+  id: string;
+  label: string;
+  prompt: string;
+  icon: string;
+  category: 'Composition' | 'Action' | 'Emotion' | 'Custom';
+  shotType?: ShotType;
+  filter?: SceneFilter;
+}
+
+export enum ImageSize {
+  Size1K = '1K',
+  Size2K = '2K',
+  Size4K = '4K'
+}
+
+export enum AspectRatio {
+  Square = '1:1',
+  Cinematic = '16:9',
+  Portrait = '9:16',
+  Standard = '4:3',
+  Wide = '2:1'
+}
+
+export enum ShotType {
+  None = 'Default',
+  CloseUp = 'Close-up',
+  MediumShot = 'Medium Shot',
+  WideShot = 'Wide Shot',
+  ExtremeWideShot = 'Extreme Wide Shot',
+  LowAngle = 'Low Angle',
+  HighAngle = 'High Angle',
+  OverTheShoulder = 'Over-the-shoulder'
+}
+
+export enum ColorMode {
+  Color = 'Color',
+  BlackAndWhite = 'B&W'
+}
+
+export const ART_STYLES = [
+  "Cinematic Realistic",
+  "Digital Concept Art",
+  "Pencil Sketch",
+  "Ink & Line Art",
+  "Watercolor",
+  "Anime / Manga",
+  "Western Comic Book",
+  "Film Noir",
+  "Cyberpunk",
+  "3D Animation (Pixar style)",
+  "Oil Painting",
+  "Retro 80s",
+  "Minimalist Vector",
+  "Ghibli Style",
+  "Frank Miller Style (High Contrast)",
+  "Claymation"
+] as const;
+
+export type ArtStyle = typeof ART_STYLES[number];
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  timestamp: number;
+}

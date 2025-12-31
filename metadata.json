@@ -1,0 +1,7 @@
+{
+  "name": "DreamBoard Pro",
+  "description": "A magical storyboard creator that turns your stories into beautiful pictures using AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

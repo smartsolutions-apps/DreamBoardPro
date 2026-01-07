@@ -26,12 +26,39 @@ const firebaseConfig = {
   measurementId: "G-SRZ7XE6XLD"
 };
 
-// Initialize
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-const googleProvider = new GoogleAuthProvider();
+// --- SAFE INITIALIZATION PATTERN ---
+// This prevents the app from white-screening if Firebase fails to load (e.g. ad blockers, bad internet, bad config)
+let app, auth: any, db: any, storage: any, googleProvider: any;
+let isFirebaseActive = false;
+
+try {
+  // Check if we have internet before trying, or just try/catch
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+  googleProvider = new GoogleAuthProvider();
+  isFirebaseActive = true;
+  console.log("Firebase initialized successfully.");
+} catch (error) {
+  console.error("CRITICAL: Firebase failed to initialize. Falling back to LOCAL OFFLINE MODE.", error);
+  
+  // Mock objects to prevent crashes in other files
+  const noop = async () => {};
+  auth = { 
+      currentUser: null, 
+      onAuthStateChanged: (cb: any) => { cb(null); return () => {}; },
+      signOut: noop,
+      signInWithPopup: noop
+  };
+  
+  // Create dummy objects for db/storage to prevent 'undefined' access errors before the helper functions intercept them
+  db = { type: 'mock-db' };
+  storage = { type: 'mock-storage' };
+  googleProvider = {};
+  
+  isFirebaseActive = false;
+}
 
 export type UserData = {
   uid: string;
@@ -49,8 +76,8 @@ export {
   signOut, 
   onAuthStateChanged,
   signInAnonymously,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
   updateProfile,
   collection,
   query,
@@ -79,6 +106,10 @@ const DB_VERSION = 1;
 
 const openLocalDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+        reject(new Error("IndexedDB not supported"));
+        return;
+    }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     
     request.onerror = () => {
@@ -109,76 +140,89 @@ const openLocalDB = (): Promise<IDBDatabase> => {
 };
 
 const localPut = async (storeName: string, item: any) => {
-  const db = await openLocalDB();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    const req = store.put(item);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const db = await openLocalDB();
+    return new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        const req = store.put(item);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+  } catch(e) { console.error("Local Put Failed", e); }
 };
 
 const localGet = async (storeName: string, id: string): Promise<any> => {
-  const db = await openLocalDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const store = tx.objectStore(storeName);
-    const req = store.get(id);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const db = await openLocalDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const req = store.get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+  } catch(e) { return null; }
 };
 
 const localGetAll = async (storeName: string): Promise<any[]> => {
-    const db = await openLocalDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+    try {
+        const db = await openLocalDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    } catch(e) { return []; }
 };
 
 const localGetFromIndex = async (storeName: string, indexName: string, value: string): Promise<any[]> => {
-    const db = await openLocalDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const index = store.index(indexName);
-        const req = index.getAll(value);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+    try {
+        const db = await openLocalDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const index = store.index(indexName);
+            const req = index.getAll(value);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    } catch(e) { return []; }
 }
 
 // Clear Database function for resetting state
 export const clearLocalDatabase = async () => {
-  return new Promise<void>((resolve, reject) => {
-    const req = indexedDB.deleteDatabase(DB_NAME);
-    req.onsuccess = () => {
-        localStorage.removeItem(LS_AUTH_KEY);
-        resolve();
-    };
-    req.onerror = () => reject(req.error);
-    req.onblocked = () => console.warn("Delete Blocked");
-  });
+  try {
+      localStorage.removeItem(LS_AUTH_KEY);
+      if (typeof indexedDB !== 'undefined') {
+        const req = indexedDB.deleteDatabase(DB_NAME);
+        return new Promise<void>((resolve) => {
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve(); // Resolve anyway
+        });
+      }
+  } catch(e) {}
 };
 
 // --- HELPER FUNCTIONS FOR APP.TSX ---
 
 export const signInAsGuest = async () => {
   try {
-    const result = await signInAnonymously(auth);
-    return result.user;
+    if (isFirebaseActive) {
+        const result = await signInAnonymously(auth);
+        return result.user;
+    } else {
+        throw new Error("Firebase inactive");
+    }
   } catch (error: any) {
-    // Force fallback to Local Mode immediately if any error occurs or running in restricted env
+    // Force fallback to Local Mode immediately if any error occurs
     console.warn("Switching to Local Offline Mode due to:", error.message);
     const mockUser = {
         uid: MOCK_USER_ID,
         isAnonymous: true,
-        displayName: 'Guest (Local Mode)',
+        displayName: 'Guest (Offline Mode)',
         email: null,
         photoURL: null,
         emailVerified: false,
@@ -200,24 +244,24 @@ export const signInAsGuest = async () => {
 };
 
 export const signInUser = async () => {
+  if (!isFirebaseActive) return signInAsGuest();
+
   try {
     const result = await signInWithPopup(auth, googleProvider);
     localStorage.removeItem(LS_AUTH_KEY); // Clear local fallback if real auth works
     return result.user;
   } catch (error: any) {
-    // If Google Auth is blocked by domain, try Guest/Local fallback automatically
-    if (error.code === 'auth/unauthorized-domain') {
+    if (error.code === 'auth/unauthorized-domain' || error.code === 'auth/operation-not-allowed') {
         return signInAsGuest();
-    }
-    if (error.code !== 'auth/cancelled-popup-request' && error.code !== 'auth/popup-closed-by-user') {
-        console.error("Auth Error", error);
     }
     throw error;
   }
 };
 
 export const logoutUser = async () => {
-  await signOut(auth);
+  if (isFirebaseActive && auth.currentUser) {
+      await signOut(auth);
+  }
   localStorage.removeItem(LS_AUTH_KEY);
 };
 
@@ -228,7 +272,8 @@ export const getAuthInstance = () => auth;
 export const getOrCreateProject = async (userId: string, title: string): Promise<Project> => {
   if (!userId) throw new Error("User ID is required to create a project");
 
-  if (userId === MOCK_USER_ID) {
+  // Force local mode if Firebase is down or user is the mock user
+  if (userId === MOCK_USER_ID || !isFirebaseActive) {
     const projects = await localGetAll('projects');
     const existing = projects.find((p: Project) => p.title === title && p.userId === userId);
     if (existing) return existing;
@@ -270,7 +315,7 @@ export const getOrCreateProject = async (userId: string, title: string): Promise
 export const getUserProjects = async (userId: string): Promise<Project[]> => {
   if (!userId) return [];
 
-  if (userId === MOCK_USER_ID) {
+  if (userId === MOCK_USER_ID || !isFirebaseActive) {
     const projects = await localGetAll('projects');
     return projects.sort((a: Project, b: Project) => b.updatedAt - a.updatedAt);
   }
@@ -284,7 +329,7 @@ export const getUserProjects = async (userId: string): Promise<Project[]> => {
 export const getProjectScenes = async (projectId: string): Promise<StoryScene[]> => {
     if (!projectId) return [];
 
-    if (projectId.startsWith('local-')) {
+    if (projectId.startsWith('local-') || !isFirebaseActive) {
         const scenes = await localGetFromIndex('scenes', 'projectId', projectId);
         return scenes.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     }
@@ -298,14 +343,11 @@ export const getProjectScenes = async (projectId: string): Promise<StoryScene[]>
 // --- STORAGE & SCENE SAVING (With Local Fallback) ---
 
 export const uploadImageToStorage = async (userId: string, projectName: string, sceneTitle: string, base64Image: string): Promise<string> => {
-  // If we are in local guest mode, we cannot upload to Firebase Storage because we aren't authenticated.
-  // Return base64 directly to allow the app to function (images will be stored in IndexedDB via saveSceneToFirestore).
-  if (userId === MOCK_USER_ID) {
-      console.warn("Skipping Firebase Upload for Guest User (Local Mode)");
+  if (userId === MOCK_USER_ID || !isFirebaseActive) {
+      console.warn("Skipping Firebase Upload (Local Mode/Offline)");
       return base64Image;
   }
 
-  // SANITIZATION LOGIC
   const safeProjectName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   
   let safeSceneTitle = sceneTitle.toLowerCase().trim();
@@ -317,7 +359,6 @@ export const uploadImageToStorage = async (userId: string, projectName: string, 
   const timestamp = Date.now();
   const filename = `${safeSceneTitle}_${timestamp}.png`;
   
-  // SECURE PATH: Use users/{userId}/scenes/{filename} to ensure privacy and permission compliance
   const path = `users/${userId}/scenes/${filename}`;
 
   try {
@@ -327,7 +368,6 @@ export const uploadImageToStorage = async (userId: string, projectName: string, 
       return url;
   } catch (error) {
       console.error("Firebase Storage Upload FAILED:", error);
-      // Fallback is essential for UI stability
       return base64Image;
   }
 };
@@ -335,16 +375,13 @@ export const uploadImageToStorage = async (userId: string, projectName: string, 
 export const saveSceneToFirestore = async (projectId: string, scene: StoryScene) => {
     if (!projectId) return;
 
-    if (projectId.startsWith('local-')) {
-        // Prepare scene data with timestamp
+    if (projectId.startsWith('local-') || !isFirebaseActive) {
         const cleanScene = JSON.parse(JSON.stringify(scene));
         cleanScene.projectId = projectId;
         cleanScene.timestamp = Date.now();
         
-        // Save to IndexedDB
         await localPut('scenes', cleanScene);
         
-        // Update Project Metadata (scene count, thumbnail)
         const project = await localGet('projects', projectId);
         if (project) {
             const allScenes = await localGetFromIndex('scenes', 'projectId', projectId);
@@ -359,18 +396,14 @@ export const saveSceneToFirestore = async (projectId: string, scene: StoryScene)
     }
 
     const scenesRef = collection(db, "scenes");
-    
-    // Clean data
     const cleanScene = JSON.parse(JSON.stringify(scene)); 
     cleanScene.projectId = projectId;
     cleanScene.timestamp = Date.now(); 
 
     if (scene.id.startsWith('scene-')) {
-        // Create new doc
         const docRef = await addDoc(scenesRef, cleanScene);
         return docRef.id;
     } else {
-        // Update existing
         const docRef = doc(db, "scenes", scene.id);
         await setDoc(docRef, cleanScene, { merge: true });
         return scene.id;
@@ -380,7 +413,7 @@ export const saveSceneToFirestore = async (projectId: string, scene: StoryScene)
 export const updateProjectThumbnail = async (projectId: string, thumbnailUrl: string) => {
     if (!projectId) return;
 
-    if (projectId.startsWith('local-')) {
+    if (projectId.startsWith('local-') || !isFirebaseActive) {
         const project = await localGet('projects', projectId);
         if (project) {
             project.thumbnailUrl = thumbnailUrl;

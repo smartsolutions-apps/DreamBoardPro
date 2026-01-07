@@ -55,10 +55,14 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscript, disabled }
 
       // Connect to Gemini Live
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         config: {
           responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: { model: "google_speech_v2" },
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+          },
+          inputAudioTranscription: {}, // Enable transcription without specific model arg
+          systemInstruction: "You are a helpful transcriber. You listen to the user and do not reply, just acknowledge.",
         },
         callbacks: {
           onopen: () => {
@@ -67,15 +71,15 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscript, disabled }
             setIsRecording(true);
           },
           onmessage: (message) => {
+            // We mainly care about the user's input transcription here
             if (message.serverContent?.inputTranscription?.text) {
                const text = message.serverContent.inputTranscription.text;
                // Accumulate instead of sending immediately
-               transcriptBufferRef.current += " " + text;
+               transcriptBufferRef.current += text;
             }
           },
           onclose: () => {
             console.log("Gemini Live Session Closed");
-            // If closed unexpectedly, we might want to trigger save, but usually cleanup is fine
             if (isRecording) cleanup();
           },
           onerror: (err) => {
@@ -90,7 +94,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscript, disabled }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
-      // Ensure context is running (fixes issues on some browsers where it starts suspended)
+      // Ensure context is running
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }

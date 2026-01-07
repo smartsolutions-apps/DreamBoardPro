@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Search, Tag, Copy, Trash, Image as ImageIcon } from 'lucide-react';
+import { X, Search, Tag, Copy, Trash, Image as ImageIcon, Check } from 'lucide-react';
 import { StoryScene, SceneVersion } from '../types';
 
 interface ImageLibraryProps {
@@ -11,10 +11,12 @@ interface ImageLibraryProps {
 export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, scenes }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Flatten all images from scenes and versions
   const allImages = scenes.flatMap(scene => {
     const main = scene.imageUrl ? [{ 
+      id: scene.id,
       url: scene.imageUrl, 
       prompt: scene.prompt, 
       title: scene.title, 
@@ -23,6 +25,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, sce
     }] : [];
     
     const vers = scene.versions.map(v => ({
+      id: v.id,
       url: v.imageUrl,
       prompt: v.prompt,
       title: `${scene.title} (Version)`,
@@ -41,6 +44,23 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, sce
     const matchesTag = selectedTag ? img.tags.includes(selectedTag) : true;
     return matchesSearch && matchesTag;
   });
+
+  const handleCopyImage = async (img: typeof allImages[0]) => {
+     try {
+         const response = await fetch(img.url);
+         const blob = await response.blob();
+         await navigator.clipboard.write([
+            new ClipboardItem({
+                [blob.type]: blob
+            })
+         ]);
+         setCopiedId(img.id);
+         setTimeout(() => setCopiedId(null), 2000);
+     } catch (err) {
+         console.error("Failed to copy image to clipboard", err);
+         alert("Could not copy image. Try right-clicking and 'Copy Image'.");
+     }
+  };
 
   return (
     <div className={`fixed right-0 top-0 bottom-0 z-50 bg-white shadow-2xl transition-all duration-300 border-l border-gray-200 flex flex-col w-96 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -91,13 +111,14 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, sce
                 <img src={img.url} className="w-full h-full object-cover" loading="lazy" />
                 
                 {/* Overlay */}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-auto">
                    <p className="text-[10px] text-white line-clamp-2 mb-2">{img.prompt}</p>
                    <button 
-                     onClick={() => navigator.clipboard.writeText(img.url)}
-                     className="bg-white/20 hover:bg-white/40 text-white p-1 rounded text-xs flex items-center justify-center gap-1 backdrop-blur-sm"
+                     onClick={() => handleCopyImage(img)}
+                     className="bg-white/20 hover:bg-white/40 text-white p-1 rounded text-xs flex items-center justify-center gap-1 backdrop-blur-sm transition-colors w-full"
                    >
-                     <Copy size={12} /> Copy URL
+                     {copiedId === img.id ? <Check size={12} className="text-green-400" /> : <Copy size={12} />} 
+                     {copiedId === img.id ? 'Copied' : 'Copy Image'}
                    </button>
                 </div>
              </div>

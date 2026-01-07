@@ -12,6 +12,62 @@ const ANALYSIS_MODEL = "gemini-3-pro-preview";
 const VIDEO_MODEL = "veo-3.1-fast-generate-preview";
 const TTS_MODEL = "gemini-2.5-flash-preview-tts";
 
+// Helper to convert raw PCM (16-bit, 24kHz, Mono) to WAV for playback
+function pcmToWav(pcmBase64: string, sampleRate: number = 24000) {
+  const binaryString = atob(pcmBase64);
+  const len = binaryString.length;
+  const buffer = new ArrayBuffer(44 + len);
+  const view = new DataView(buffer);
+
+  // RIFF identifier
+  writeString(view, 0, 'RIFF');
+  // file length
+  view.setUint32(4, 36 + len, true);
+  // RIFF type
+  writeString(view, 8, 'WAVE');
+  // format chunk identifier
+  writeString(view, 12, 'fmt ');
+  // format chunk length
+  view.setUint32(16, 16, true);
+  // sample format (raw)
+  view.setUint16(20, 1, true);
+  // channel count
+  view.setUint16(22, 1, true);
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate (sampleRate * blockAlign)
+  view.setUint32(28, sampleRate * 2, true);
+  // block align (channel count * bytes per sample)
+  view.setUint16(32, 2, true);
+  // bits per sample
+  view.setUint16(34, 16, true);
+  // data chunk identifier
+  writeString(view, 36, 'data');
+  // data chunk length
+  view.setUint32(40, len, true);
+
+  // data
+  const bytes = new Uint8Array(buffer, 44);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  // Convert back to base64
+  let binary = '';
+  const bytesAll = new Uint8Array(buffer);
+  const lenAll = bytesAll.byteLength;
+  for (let i = 0; i < lenAll; i++) {
+    binary += String.fromCharCode(bytesAll[i]);
+  }
+  return btoa(binary);
+}
+
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
 export const analyzeScript = async (script: string, sceneCount: number = 5): Promise<string[]> => {
   try {
     const ai = getAiClient();
@@ -43,12 +99,37 @@ export const analyzeScript = async (script: string, sceneCount: number = 5): Pro
   }
 };
 
+const cleanPromptText = (text: string): string => {
+  if (!text) return "";
+  
+  // 1. Remove explicit labels like "PANEL 1:", "Scene 3 -", "Shot 5."
+  let cleaned = text.replace(/^(PANEL|SCENE|SHOT|STORYBOARD|FRAME)\s*(\d+|[A-Z])?[:\-.]?\s*/i, '');
+  
+  // 2. Remove "Title:" or "Action:" prefixes
+  cleaned = cleaned.replace(/^(Title|Caption|Action|Description)[:\-.]?\s*/i, '');
+
+  // 3. Heuristic: Remove short titles at start (e.g. "The Arrival. A spaceship lands...")
+  // Only if followed by a period and the prefix is short (< 50 chars)
+  const firstPeriodIndex = cleaned.indexOf('.');
+  if (firstPeriodIndex > -1 && firstPeriodIndex < 50) {
+      const remaining = cleaned.substring(firstPeriodIndex + 1).trim();
+      // Heuristic: If remaining text is substantial, assume the first part was a title
+      if (remaining.length > 10) {
+          cleaned = remaining;
+      }
+  }
+
+  return cleaned.trim();
+};
+
 const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode) => {
+  const cleanedPrompt = cleanPromptText(prompt);
+  
   const colorInstruction = colorMode === ColorMode.BlackAndWhite 
     ? "Black and white, high contrast, traditional ink storyboard style, charcoal sketch, monochrome, no color."
     : "Full color, vibrant, professional lighting.";
   
-  return `Create a storyboard image. Style: ${style}. Mode: ${colorInstruction}. Subject: ${prompt}. ensure high quality, detailed composition.`;
+  return `Create a storyboard image. Style: ${style}. Mode: ${colorInstruction}. Subject: ${cleanedPrompt}. Ensure high quality, detailed composition. Do not render text, titles, or UI elements.`;
 };
 
 export const generateSceneImage = async (
@@ -129,7 +210,8 @@ export const refineSceneImage = async (
   try {
     const ai = getAiClient();
     const base64Data = originalImage.split(',')[1] || originalImage;
-    const fullPrompt = `Edit this image: ${instruction}. Maintain the following style: ${style}, ${colorMode === ColorMode.BlackAndWhite ? 'Black & White' : 'Color'}. Keep composition similar.`;
+    // We don't clean instruction here usually as it's a command, but we enforce style/mode
+    const fullPrompt = `Edit this image: ${instruction}. Maintain the following style: ${style}, ${colorMode === ColorMode.BlackAndWhite ? 'Black & White' : 'Color'}. Keep composition similar. Do not add text.`;
 
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
@@ -182,7 +264,7 @@ export const upscaleImage = async (
               data: base64Data
             }
           },
-          { text: "High resolution, 4K, sharpen details, enhance lighting, professional masterpiece. Maintain exact composition." }
+          { text: "Upscale this image. High resolution, 4K, sharpen details, enhance lighting, professional masterpiece. Maintain exact composition. Do not add text." }
         ]
       },
       config: {
@@ -193,19 +275,33 @@ export const upscaleImage = async (
       }
     });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
+    const imagePart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    
+    if (imagePart && imagePart.inlineData) {
+        return `data:image/png;base64,${imagePart.inlineData.data}`;
     }
-    throw new Error("Upscale failed");
+
+    // Check for refusal/text
+    const textPart = response.candidates?.[0]?.content?.parts?.find(p => p.text);
+    if (textPart && textPart.text) {
+        console.warn("Upscale Model Refusal/Response:", textPart.text);
+        throw new Error(`Upscale failed: Model returned text instead of image (${textPart.text.substring(0, 50)}...)`);
+    }
+
+    throw new Error("Upscale failed: No image returned");
   } catch (error) {
     console.error("Error upscaling:", error);
     throw error;
   }
 };
 
-export const checkContinuity = async (scenes: { title: string, prompt: string, imageUrl?: string }[]): Promise<string> => {
+export interface ContinuityIssue {
+  sceneIndex: number;
+  issue: string;
+  suggestion: string;
+}
+
+export const checkContinuity = async (scenes: { title: string, prompt: string, imageUrl?: string }[]): Promise<ContinuityIssue[]> => {
   try {
     const ai = getAiClient();
     
@@ -214,14 +310,18 @@ export const checkContinuity = async (scenes: { title: string, prompt: string, i
     Check specifically for:
     1. Visual Consistency: Do characters look the same (clothes, hair) across shots? Is the lighting consistent?
     2. Narrative Logic: Do the shots follow a logical sequence? Are object positions consistent?
-    If images are provided, analyze the pixels. If only text is provided, analyze the descriptions.
-    Output Format:
-    - Issue 1: [Description] -> [Suggestion]
-    If everything looks good, simply say "Continuity looks good!".
+    
+    IMPORTANT: Return the result as a JSON array of objects.
+    Each object must have:
+    - sceneIndex: The 0-based index of the scene having the issue.
+    - issue: A short description of the problem.
+    - suggestion: A specific instruction to fix the prompt (e.g., "Add 'wearing red scarf' to the prompt").
+    
+    If a scene is fine, do not include it in the array.
     `});
 
     scenes.forEach((s, i) => {
-      parts.push({ text: `\n--- SCENE ${i + 1}: ${s.title} ---\nDescription: ${s.prompt}\n` });
+      parts.push({ text: `\n--- SCENE ${i} (Index ${i}): ${s.title} ---\nDescription: ${s.prompt}\n` });
       if (s.imageUrl) {
          const base64Data = s.imageUrl.split(',')[1] || s.imageUrl;
          parts.push({
@@ -238,23 +338,51 @@ export const checkContinuity = async (scenes: { title: string, prompt: string, i
     const response = await ai.models.generateContent({
       model: ANALYSIS_MODEL,
       contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              sceneIndex: { type: Type.INTEGER },
+              issue: { type: Type.STRING },
+              suggestion: { type: Type.STRING }
+            }
+          }
+        }
+      }
     });
     
-    return response.text || "No analysis available.";
+    const text = response.text;
+    if (!text) return [];
+    return JSON.parse(text) as ContinuityIssue[];
   } catch (error) {
     console.error("Continuity check failed", error);
-    return "Failed to check continuity. Please ensure you have generated images first for best results.";
+    return [];
   }
 };
 
-export const generateSceneVideo = async (imageUrl: string, prompt: string): Promise<string> => {
+export const generateSceneVideo = async (imageUrl: string, prompt: string, aspectRatio?: AspectRatio): Promise<string> => {
+  // Check/Request Key for Veo if needed (fallback for non-env setup)
+  if (typeof window !== 'undefined' && (window as any).aistudio) {
+     const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+     if (!hasKey) {
+         await (window as any).aistudio.openSelectKey();
+     }
+  }
+
   try {
     const ai = getAiClient();
     const base64Data = imageUrl.split(',')[1] || imageUrl;
 
+    const veoRatio: '9:16' | '16:9' = aspectRatio === AspectRatio.Portrait ? '9:16' : '16:9';
+
+    console.log("Starting Video Generation...");
+
     let operation = await ai.models.generateVideos({
       model: VIDEO_MODEL,
-      prompt: `Cinematic camera movement. ${prompt}`,
+      prompt: `Cinematic camera movement. ${cleanPromptText(prompt)}`,
       image: {
         imageBytes: base64Data,
         mimeType: 'image/png',
@@ -262,23 +390,42 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string): Prom
       config: {
         numberOfVideos: 1,
         resolution: '720p',
-        aspectRatio: '16:9' // VEO preview often defaults to this or requires specific ratios
+        aspectRatio: veoRatio
       }
     });
 
+    console.log("Video Operation Started:", operation);
+
+    // Safety timeout loop (max 5 minutes)
+    let attempts = 0;
+    const maxAttempts = 30; // 30 * 10000ms = 300 seconds (5 minutes)
+    
     while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      if (attempts > maxAttempts) throw new Error("Video generation timed out. Please try again.");
+      await new Promise(resolve => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({operation: operation});
+      attempts++;
+    }
+
+    console.log("Video Operation Complete:", operation);
+
+    if (operation.error) {
+        throw new Error(operation.error.message || "Unknown Video Generation Error");
     }
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Video generation failed");
+    if (!downloadLink) throw new Error("Video generation failed: No download URI returned.");
     
-    // In a real app, we would fetch this blob with the key. For this demo, we'll return the URI.
-    // The main app must append the key when setting src.
+    // CRITICAL FIX: Append the correct API_KEY.
     return `${downloadLink}&key=${process.env.API_KEY}`;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Video generation failed", error);
+    
+    if (typeof window !== 'undefined' && (window as any).aistudio) {
+        if (error.message?.includes('Requested entity was not found') || error.message?.includes('404')) {
+             await (window as any).aistudio.openSelectKey();
+        }
+    }
     throw error;
   }
 };
@@ -299,11 +446,14 @@ export const generateNarration = async (text: string): Promise<string> => {
       },
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No audio generated");
+    const base64Pcm = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Pcm) throw new Error("No audio generated");
     
-    return `data:audio/mp3;base64,${base64Audio}`;
-  } catch (error) {
+    // Convert raw PCM to WAV data URI for browser playback
+    const base64Wav = pcmToWav(base64Pcm, 24000); // 24kHz is default for this model
+    
+    return `data:audio/wav;base64,${base64Wav}`;
+  } catch (error: any) {
     console.error("TTS failed", error);
     throw error;
   }
@@ -327,7 +477,7 @@ export const autoTagScene = async (prompt: string, image?: string): Promise<stri
     });
 
     return JSON.parse(response.text || "[]");
-  } catch (e) {
+  } catch (e: any) {
     return [];
   }
 };

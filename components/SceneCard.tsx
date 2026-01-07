@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { RefreshCw, Download, Edit2, Check, X, GripVertical, AlertCircle, Image as ImageIcon, Sparkles, Upload, Copy, Clock, RotateCcw, Zap, Sliders, Palette, Link as LinkIcon, Pencil, Save, Play, SplitSquareHorizontal, Type, Video, Music, Tag as TagIcon, Volume2 } from 'lucide-react';
+import { RefreshCw, Download, Edit2, Check, X, GripVertical, AlertCircle, Image as ImageIcon, Sparkles, Upload, Copy, Clock, RotateCcw, Zap, Sliders, Palette, Link as LinkIcon, Pencil, Save, Play, SplitSquareHorizontal, Type, Video, Music, Tag as TagIcon, Volume2, Maximize2, MoreHorizontal } from 'lucide-react';
 import { StoryScene, ShotType, AspectRatio, SceneVersion, SceneFilter, SceneTransition, TextStyle } from '../types';
 import { SketchPad } from './SketchPad';
 
@@ -21,6 +21,7 @@ interface SceneCardProps {
   onDragStart: (e: React.DragEvent, index: number) => void;
   onDragOver: (e: React.DragEvent, index: number) => void;
   onDrop: (e: React.DragEvent, index: number) => void;
+  onExpand: (imageUrl: string) => void;
 }
 
 const FILTERS: { id: SceneFilter; label: string; class: string }[] = [
@@ -62,7 +63,8 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   onGenerateAudio,
   onDragStart,
   onDragOver,
-  onDrop
+  onDrop,
+  onExpand
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -72,6 +74,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [showSketchPad, setShowSketchPad] = useState(false);
   const [isPreviewingTransition, setIsPreviewingTransition] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const [editPrompt, setEditPrompt] = useState(scene.prompt);
@@ -183,10 +186,29 @@ export const SceneCard: React.FC<SceneCardProps> = ({
     }
   };
 
-  const handleCopyPrompt = () => {
-     navigator.clipboard.writeText(scene.prompt);
-     setCopyFeedback(true);
-     setTimeout(() => setCopyFeedback(false), 2000);
+  const handleCopyImage = async () => {
+    if (!scene.imageUrl) return;
+    try {
+        // Try Text/URL Copy First (for browsers)
+        await navigator.clipboard.writeText(scene.imageUrl);
+        setCopyFeedback(true);
+        setTimeout(() => setCopyFeedback(false), 2000);
+    } catch (err) {
+        console.error("Text copy failed, trying blob", err);
+        // Fallback to Blob Copy (for image editors)
+        try {
+            const response = await fetch(scene.imageUrl);
+            const blob = await response.blob();
+            await navigator.clipboard.write([
+                new ClipboardItem({ [blob.type]: blob })
+            ]);
+            setCopyFeedback(true);
+            setTimeout(() => setCopyFeedback(false), 2000);
+        } catch (blobErr) {
+             console.error("Blob copy failed", blobErr);
+             alert("Could not copy to clipboard.");
+        }
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -232,14 +254,14 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       onDragOver={(e) => onDragOver(e, index)}
       onDrop={(e) => onDrop(e, index)}
       className={`
-        bg-white rounded-3xl overflow-visible shadow-sm hover:shadow-xl transition-all duration-300 border flex flex-col group relative
+        bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border flex flex-col group relative
         ${isEditing ? 'ring-2 ring-brand-300 z-10 scale-[1.02] border-brand-200' : 'border-gray-100'}
         ${isSelected ? 'ring-2 ring-indigo-500 border-indigo-500' : ''}
       `}
     >
-      {/* Checkbox */}
+      {/* Checkbox - Elevated z-index */}
       {!isEditing && (
-        <div className="absolute top-3 left-3 z-20">
+        <div className="absolute top-3 left-3 z-30">
            <input 
              type="checkbox"
              checked={isSelected}
@@ -249,17 +271,24 @@ export const SceneCard: React.FC<SceneCardProps> = ({
         </div>
       )}
 
-      {/* Drag Handle */}
+      {/* Drag Handle - Elevated z-index */}
       {!isEditing && (
-        <div className="absolute top-3 left-10 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-move bg-white/80 p-1.5 rounded-lg text-gray-500 hover:text-gray-800 backdrop-blur-sm shadow-sm">
+        <div className="absolute top-3 left-10 z-30 opacity-0 group-hover:opacity-100 transition-opacity cursor-move bg-white/80 p-1.5 rounded-lg text-gray-500 hover:text-gray-800 backdrop-blur-sm shadow-sm">
           <GripVertical size={16} />
         </div>
       )}
 
       {/* Image Area */}
-      <div className={`relative overflow-hidden rounded-t-3xl bg-gray-50 ${getAspectRatioClass(aspectRatio)}`}>
+      <div 
+        className={`relative bg-gray-50 ${getAspectRatioClass(aspectRatio)} cursor-pointer group/image`}
+        onClick={() => {
+            if (!isEditing && scene.imageUrl && !scene.videoUrl) {
+                onExpand(hoveredVersion || scene.imageUrl);
+            }
+        }}
+      >
         {scene.isLoading ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
             <div className="relative w-16 h-16 mb-4">
               <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
               <div className="absolute inset-0 border-4 border-t-brand-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
@@ -267,11 +296,11 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             <span className="text-sm font-bold text-brand-500 animate-pulse">Rendering Scene {index + 1}...</span>
           </div>
         ) : scene.error ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-6 text-center bg-red-50/50">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 p-6 text-center bg-red-50/50">
             <AlertCircle size={32} className="mb-2 text-red-400" />
             <span className="text-sm text-red-500 font-medium">{scene.error}</span>
             <button 
-              onClick={() => onRegenerate(scene.id, scene.prompt)}
+              onClick={(e) => { e.stopPropagation(); onRegenerate(scene.id, scene.prompt); }}
               className="mt-4 px-5 py-2 bg-white border border-red-200 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors shadow-sm"
             >
               Retry
@@ -279,191 +308,76 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           </div>
         ) : (
           <>
-            {/* Main Image or Video or Comparison Image */}
-            {scene.videoUrl ? (
-                <video src={scene.videoUrl} autoPlay loop muted className="w-full h-full object-cover" />
+            {/* Main Image or Video */}
+            {scene.videoUrl && !videoError ? (
+                <video 
+                    src={scene.videoUrl} 
+                    autoPlay 
+                    loop 
+                    muted 
+                    className="w-full h-full object-cover relative z-10"
+                    onError={() => setVideoError(true)}
+                />
             ) : (scene.imageUrl || hoveredVersion) ? (
-              <img 
-                src={hoveredVersion || scene.imageUrl} 
-                alt={scene.prompt} 
-                className={`
-                  w-full h-full object-cover transition-all duration-700 
-                  ${!hoveredVersion && 'group-hover:scale-105'}
-                  ${!hoveredVersion && FILTERS.find(f => f.id === scene.filter)?.class}
-                  ${isPreviewingTransition ? 'opacity-50 scale-110' : ''} 
-                `}
-              />
+              <>
+                  <img 
+                    src={hoveredVersion || scene.imageUrl} 
+                    alt={scene.prompt} 
+                    className={`
+                      w-full h-full object-cover transition-all duration-700 relative z-10
+                      ${!hoveredVersion && FILTERS.find(f => f.id === scene.filter)?.class}
+                      ${isPreviewingTransition ? 'opacity-50 scale-110' : ''} 
+                    `}
+                  />
+                  {/* Hover Overlay - z-20 to be above image but below controls if needed, but here it IS the control trigger */}
+                  <div className="absolute inset-0 z-20 bg-black/0 group-hover/image:bg-black/10 transition-colors flex items-center justify-center pointer-events-none">
+                      <Maximize2 className="text-white opacity-0 group-hover/image:opacity-100 drop-shadow-md transition-opacity" size={32} />
+                  </div>
+                  
+                  {/* Fallback Error for Video */}
+                  {scene.videoUrl && videoError && (
+                      <div className="absolute bottom-4 left-4 right-4 bg-red-100 border border-red-200 p-2 rounded text-xs text-red-700 z-30 flex items-center gap-2">
+                          <AlertCircle size={12} /> Upload Failed - Check Console
+                      </div>
+                  )}
+              </>
             ) : (
-               <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-100">
+               <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-100 relative z-10">
                   <ImageIcon size={48} />
                </div>
             )}
             
             {/* Loading Overlay for Video/Audio */}
             {(scene.isVideoLoading || scene.isAudioLoading) && (
-              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                  <div className="bg-white/90 px-4 py-2 rounded-full flex items-center gap-2 text-xs font-bold shadow-lg animate-pulse">
-                     {scene.isVideoLoading ? <Video size={14} className="text-brand-500"/> : <Music size={14} className="text-brand-500"/>}
-                     Generating...
+              <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-30 backdrop-blur-sm">
+                  <div className="bg-white/95 px-5 py-3 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-xl animate-bounce-in">
+                     {scene.isVideoLoading ? <Video size={18} className="text-brand-500 animate-pulse"/> : <Music size={18} className="text-brand-500 animate-pulse"/>}
+                     <span className="bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                        {scene.isVideoLoading ? 'Generating Video...' : 'Creating Audio...'}
+                     </span>
                   </div>
               </div>
             )}
 
             {/* Filter/Style Pills */}
-            <div className="absolute top-3 right-3 flex flex-col gap-1 items-end pointer-events-none">
+            <div className="absolute top-3 right-3 flex flex-col gap-1 items-end pointer-events-none z-30">
               {scene.filter && scene.filter !== 'none' && !scene.isLoading && (
                  <div className="bg-black/50 backdrop-blur-md text-white px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider">
                    {FILTERS.find(f => f.id === scene.filter)?.label}
-                 </div>
-              )}
-              {scene.textStyle && scene.textStyle !== 'Standard' && (
-                 <div className="bg-indigo-900/50 backdrop-blur-md text-white px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider">
-                   {scene.textStyle} Text
                  </div>
               )}
             </div>
 
             {/* Comparison Label */}
             {hoveredVersion && (
-               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white px-4 py-2 rounded-full font-bold text-sm backdrop-blur-md pointer-events-none">
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white px-4 py-2 rounded-full font-bold text-sm backdrop-blur-md pointer-events-none z-30">
                   Viewing Old Version
                </div>
             )}
             
-            {/* Overlay Actions */}
-            {!isEditing && !hoveredVersion && (
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2">
-                 {/* Generate Video (Veo) */}
-                 <button 
-                  onClick={() => onGenerateVideo(scene.id)}
-                  title={scene.videoUrl ? "Regenerate Video" : "Animate Scene (Veo)"}
-                  className="bg-white/90 p-2 rounded-xl text-pink-500 shadow-sm hover:text-pink-600 hover:bg-white transition-colors"
-                >
-                   <Video size={18} />
-                 </button>
-
-                 {/* Generate Audio (TTS) */}
-                 <button 
-                  onClick={toggleAudio}
-                  title={scene.audioUrl ? (isPlayingAudio ? "Pause Narration" : "Play Narration") : "Generate Narration"}
-                  className={`bg-white/90 p-2 rounded-xl shadow-sm hover:bg-white transition-colors ${isPlayingAudio ? 'text-green-500 animate-pulse' : 'text-cyan-500 hover:text-cyan-600'}`}
-                >
-                   {scene.audioUrl && isPlayingAudio ? <Volume2 size={18} /> : <Music size={18} />}
-                </button>
-
-                 {/* Upscale */}
-                 <button 
-                  onClick={() => onUpscale(scene.id)}
-                  title="Upscale / Enhance"
-                  className="bg-white/90 p-2 rounded-xl text-amber-500 shadow-sm hover:text-amber-600 hover:bg-white transition-colors"
-                >
-                   <Zap size={18} />
-                 </button>
-                 
-                 {/* Filters */}
-                 <div className="relative">
-                   <button 
-                    onClick={() => setShowFilters(!showFilters)}
-                    title="Apply Filters"
-                    className="bg-white/90 p-2 rounded-xl text-purple-500 shadow-sm hover:text-purple-600 hover:bg-white transition-colors"
-                  >
-                     <Sliders size={18} />
-                   </button>
-                   {showFilters && (
-                     <div className="absolute top-0 right-full mr-2 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-right">
-                       {FILTERS.map(filter => (
-                         <button 
-                           key={filter.id}
-                           onClick={() => {
-                             onUpdateScene(scene.id, { filter: filter.id });
-                             setShowFilters(false);
-                           }} 
-                           className={`px-3 py-2 text-left text-xs font-semibold hover:bg-gray-50 transition-colors flex justify-between items-center ${scene.filter === filter.id ? 'text-brand-600 bg-brand-50' : 'text-gray-600'}`}
-                         >
-                           {filter.label}
-                           {scene.filter === filter.id && <Check size={12} />}
-                         </button>
-                       ))}
-                     </div>
-                   )}
-                 </div>
-                 
-                 {/* Text Styles */}
-                 <div className="relative">
-                   <button 
-                    onClick={() => setShowTextStyles(!showTextStyles)}
-                    title="Text Effects"
-                    className="bg-white/90 p-2 rounded-xl text-blue-500 shadow-sm hover:text-blue-600 hover:bg-white transition-colors"
-                  >
-                     <Type size={18} />
-                   </button>
-                   {showTextStyles && (
-                     <div className="absolute top-0 right-full mr-2 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-right">
-                       {TEXT_STYLES.map(style => (
-                         <button 
-                           key={style.id}
-                           onClick={() => {
-                             onUpdateScene(scene.id, { textStyle: style.id });
-                             setShowTextStyles(false);
-                           }} 
-                           className={`px-3 py-2 text-left text-xs font-semibold hover:bg-gray-50 transition-colors flex justify-between items-center ${scene.textStyle === style.id ? 'text-brand-600 bg-brand-50' : 'text-gray-600'}`}
-                         >
-                           {style.label}
-                           {scene.textStyle === style.id && <Check size={12} />}
-                         </button>
-                       ))}
-                     </div>
-                   )}
-                 </div>
-
-                 {/* Save Template */}
-                 <button 
-                  onClick={() => onSaveTemplate(scene)}
-                  title="Save as Template"
-                  className="bg-white/90 p-2 rounded-xl text-amber-600 shadow-sm hover:text-amber-700 hover:bg-white transition-colors"
-                >
-                   <Save size={18} />
-                 </button>
-
-                 <button 
-                  onClick={handleCopyPrompt}
-                  title="Copy Prompt"
-                  className="bg-white/90 p-2 rounded-xl text-gray-700 shadow-sm hover:text-indigo-600 hover:bg-white transition-colors relative"
-                >
-                   {copyFeedback ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
-                 </button>
-                
-                <button 
-                  onClick={() => setIsEditing(true)}
-                  title="Edit Scene"
-                  className="bg-white/90 p-2 rounded-xl text-gray-700 shadow-sm hover:text-brand-600 hover:bg-white transition-colors"
-                >
-                  <Edit2 size={18} />
-                </button>
-                 
-                 {/* Download Button with Dropdown */}
-                 <div className="relative">
-                   <button 
-                    onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                    title="Download Image"
-                    className="bg-white/90 p-2 rounded-xl text-gray-700 shadow-sm hover:text-indigo-600 hover:bg-white transition-colors"
-                  >
-                     <Download size={18} />
-                   </button>
-                   {showDownloadMenu && (
-                     <div className="absolute top-full right-0 mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-up">
-                       <button onClick={() => downloadImage('png')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">PNG (Default)</button>
-                       <button onClick={() => downloadImage('jpeg')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">JPEG (Small)</button>
-                       <button onClick={() => downloadImage('webp')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">WebP (Web)</button>
-                     </div>
-                   )}
-                 </div>
-              </div>
-            )}
-
             {/* Version History Toggle */}
              {!isEditing && scene.versions && scene.versions.length > 0 && (
-              <div className="absolute bottom-2 right-2 z-20">
+              <div className="absolute bottom-2 right-2 z-30" onClick={(e) => e.stopPropagation()}>
                  <button 
                    onClick={() => setShowHistory(!showHistory)}
                    className="bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-lg backdrop-blur-sm transition-all"
@@ -522,10 +436,109 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           </>
         )}
       </div>
+
+      {/* TOOLBAR: High Z-Index to prevent blocking */}
+      {!isEditing && !scene.isLoading && !scene.error && (
+         <div className="relative z-40 flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-b border-gray-100">
+            <div className="flex gap-1">
+                 {/* Main Creation Actions */}
+                 <button 
+                  onClick={() => { setVideoError(false); onGenerateVideo(scene.id); }}
+                  title={scene.videoUrl ? "Regenerate Video" : "Animate Scene (Veo)"}
+                  className={`p-1.5 rounded-lg transition-colors ${scene.videoUrl && !videoError ? 'bg-pink-100 text-pink-600' : 'hover:bg-gray-200 text-gray-600'}`}
+                >
+                   <Video size={16} />
+                 </button>
+
+                 <button 
+                  onClick={toggleAudio}
+                  title={scene.audioUrl ? (isPlayingAudio ? "Pause Narration" : "Play Narration") : "Generate Narration"}
+                  className={`p-1.5 rounded-lg transition-colors ${isPlayingAudio ? 'bg-green-100 text-green-600 animate-pulse' : (scene.audioUrl ? 'text-green-600' : 'hover:bg-gray-200 text-gray-600')}`}
+                >
+                   {scene.audioUrl && isPlayingAudio ? <Volume2 size={16} /> : <Music size={16} />}
+                </button>
+                
+                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
+                 {/* Editing Actions */}
+                 <button 
+                  onClick={() => onUpscale(scene.id)}
+                  title="Upscale"
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+                >
+                   <Zap size={16} />
+                 </button>
+
+                 <button 
+                  onClick={() => setIsEditing(true)}
+                  title="Edit Scene"
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+                >
+                  <Edit2 size={16} />
+                </button>
+            </div>
+            
+            <div className="flex gap-1 relative">
+                {/* Secondary Actions in a "More" or simple list */}
+                
+                {/* Filters Dropdown */}
+                <div className="relative">
+                   <button 
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+                    title="Filters"
+                  >
+                     <Sliders size={16} />
+                   </button>
+                   {showFilters && (
+                     <div className="absolute bottom-full right-0 mb-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-up">
+                       {FILTERS.map(filter => (
+                         <button 
+                           key={filter.id}
+                           onClick={() => {
+                             onUpdateScene(scene.id, { filter: filter.id });
+                             setShowFilters(false);
+                           }} 
+                           className={`px-3 py-2 text-left text-xs font-semibold hover:bg-gray-50 transition-colors flex justify-between items-center ${scene.filter === filter.id ? 'text-brand-600 bg-brand-50' : 'text-gray-600'}`}
+                         >
+                           {filter.label}
+                           {scene.filter === filter.id && <Check size={12} />}
+                         </button>
+                       ))}
+                     </div>
+                   )}
+                 </div>
+
+                 <button 
+                  onClick={handleCopyImage}
+                  title="Copy Link/Image"
+                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors relative"
+                >
+                   {copyFeedback ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                 </button>
+
+                 <div className="relative">
+                   <button 
+                    onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                    className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+                    title="Download"
+                  >
+                     <Download size={16} />
+                   </button>
+                   {showDownloadMenu && (
+                     <div className="absolute bottom-full right-0 mb-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-up">
+                       <button onClick={() => downloadImage('png')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">PNG (Default)</button>
+                       <button onClick={() => downloadImage('jpeg')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">JPEG (Small)</button>
+                     </div>
+                   )}
+                 </div>
+            </div>
+         </div>
+      )}
       
       {/* Edit Panel */}
       {isEditing && (
-         <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-4">
+         <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-4 relative z-40">
              {/* ... (Existing Edit Panel Logic) ... */}
              <div className="flex bg-gray-200 p-1 rounded-lg">
                 <button 
@@ -641,7 +654,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       
       {/* Footer Info & Transitions */}
       {!isEditing && (
-        <div className="p-4 flex-1 flex flex-col bg-white rounded-b-3xl gap-2">
+        <div className="p-4 flex-1 flex flex-col bg-white rounded-b-3xl gap-2 relative z-40">
            <div className="flex items-center justify-between">
              {isEditingTitle ? (
                <input 

@@ -16,7 +16,17 @@ export const ChatWidget: React.FC = () => {
   // Initialize chat session once
   useEffect(() => {
     if (!chatSessionRef.current) {
-      chatSessionRef.current = createChatSession();
+      try {
+        chatSessionRef.current = createChatSession();
+      } catch (error) {
+        console.warn("Chat session could not be initialized (API Key might be missing).", error);
+        setMessages(prev => [{
+            id: 'error', 
+            role: 'model', 
+            text: "I'm having trouble connecting to my brain (API Key missing). Please check your settings.", 
+            timestamp: Date.now() 
+        }]);
+      }
     }
   }, []);
 
@@ -41,6 +51,22 @@ export const ChatWidget: React.FC = () => {
 
     setMessages(prev => [...prev, newUserMsg]);
     setIsLoading(true);
+
+    if (!chatSessionRef.current) {
+         // Try to init again if it failed first time
+         try {
+            chatSessionRef.current = createChatSession();
+         } catch (e) {
+             setIsLoading(false);
+             setMessages(prev => [...prev, {
+                id: Date.now().toString(),
+                role: 'model',
+                text: "Still can't connect. Do you have a valid API Key?",
+                timestamp: Date.now()
+             }]);
+             return;
+         }
+    }
 
     try {
       const result = await chatSessionRef.current.sendMessage({ message: userText });

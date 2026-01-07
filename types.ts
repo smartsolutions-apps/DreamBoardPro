@@ -1,3 +1,4 @@
+
 export interface SceneVersion {
   id: string;
   imageUrl: string;
@@ -29,6 +30,24 @@ export interface StoryScene {
   isAudioLoading?: boolean;
   error?: string;
   versions: SceneVersion[];
+  projectId?: string; // Link to parent project
+}
+
+export interface Project {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  thumbnailUrl?: string;
+  sceneCount: number;
+}
+
+export interface UserProfile {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
 }
 
 export interface SceneTemplate {
@@ -72,22 +91,22 @@ export enum ColorMode {
 }
 
 export const ART_STYLES = [
-  "Cinematic Realistic",
-  "Digital Concept Art",
   "Pencil Sketch",
   "Ink & Line Art",
-  "Watercolor",
-  "Anime / Manga",
-  "Western Comic Book",
-  "Film Noir",
-  "Cyberpunk",
-  "3D Animation (Pixar style)",
-  "Oil Painting",
-  "Retro 80s",
   "Minimalist Vector",
+  "Watercolor",
+  "Western Comic Book",
+  "Anime / Manga",
+  "Retro 80s",
   "Ghibli Style",
+  "Oil Painting",
   "Frank Miller Style (High Contrast)",
-  "Claymation"
+  "Film Noir",
+  "Claymation",
+  "3D Animation (Pixar style)",
+  "Cyberpunk",
+  "Digital Concept Art",
+  "Cinematic Realistic"
 ] as const;
 
 export type ArtStyle = typeof ART_STYLES[number];

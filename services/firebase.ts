@@ -94,7 +94,8 @@ export {
   getDoc,
   setDoc,
   where,
-  getDocs
+  getDocs,
+  saveProject
 };
 
 // --- CONSTANTS FOR LOCAL FALLBACK ---
@@ -533,5 +534,52 @@ export const uploadAudioToStorage = async (userId: string, sceneTitle: string, a
   } catch (error) {
     console.error("Audio Upload Failed:", error);
     return audioData;
+  }
+};
+
+export const saveProject = async (project: Project, scenesList?: StoryScene[]) => {
+  if (!project.id) return;
+
+  /* 
+     CRITICAL: We must save to users/{userId}/projects/{projectId}
+     AND include the 'scenes' metadata array.
+  */
+
+  if (project.id.startsWith('local-') || !isFirebaseActive) {
+    await localPut('projects', project);
+    return;
+  }
+
+  try {
+    const projectRef = doc(db, "users", project.userId, "projects", project.id);
+
+    const { id, ...data } = project;
+    const deployPayload: any = {
+      ...data,
+      updatedAt: serverTimestamp() // Use server time
+    };
+
+    // If we have scenesList, map them to lightweight metadata
+    // If not, we trust the project object might already have it or we skip updating scenes
+    if (scenesList && scenesList.length > 0) {
+      deployPayload.scenes = scenesList.map(s => ({
+        storageUrl: s.imageUrl || '',
+        id: s.id
+      })).filter(s => s.storageUrl);
+
+      // Sync scene count
+      deployPayload.sceneCount = scenesList.length;
+
+      // Sync thumbnail (use first image)
+      if (scenesList[0].imageUrl) {
+        deployPayload.thumbnailUrl = scenesList[0].imageUrl;
+      }
+    }
+
+    await setDoc(projectRef, deployPayload, { merge: true });
+    console.log("🔥 SUCCESS: Project saved to DB", project.id);
+
+  } catch (e) {
+    console.error("Failed to save project:", e);
   }
 };

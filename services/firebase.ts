@@ -97,49 +97,296 @@ export {
   getDocs
 };
 
-export const saveProject = async (project: Project, scenesList?: StoryScene[]) => {
-  if (!project.id) return;
+// --- CONSTANTS FOR LOCAL FALLBACK ---
+const MOCK_USER_ID = 'local-guest';
+const LS_AUTH_KEY = 'dreamBoard_localGuest';
 
-  /* 
-     CRITICAL: We must save to users/{userId}/projects/{projectId}
-     AND include the 'scenes' metadata array.
-  */
+// --- INDEXED DB HELPERS (For Local Storage Mode) ---
+const DB_NAME = 'DreamBoardLocalDB';
+const DB_VERSION = 1;
 
-  if (project.id.startsWith('local-') || !isFirebaseActive) {
-    await localPut('projects', project);
-    return;
-  }
+const openLocalDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error("IndexedDB not supported"));
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-  try {
-    const projectRef = doc(db, "users", project.userId, "projects", project.id);
-
-    const { id, ...data } = project;
-    const deployPayload: any = {
-      ...data,
-      updatedAt: serverTimestamp() // Use server time
+    request.onerror = () => {
+      console.error("IndexedDB Error:", request.error);
+      reject(request.error);
     };
 
-    // If we have scenes list, map them to lightweight metadata
-    if (scenesList && scenesList.length > 0) {
-      deployPayload.scenes = scenesList.map(s => ({
-        storageUrl: s.imageUrl || '',
-        id: s.id
-      })).filter(s => s.storageUrl);
+    request.onsuccess = () => resolve(request.result);
 
-      // Sync scene count
-      deployPayload.sceneCount = scenesList.length;
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
 
-      // Sync thumbnail (use first image)
-      if (scenesList[0].imageUrl) {
-        deployPayload.thumbnailUrl = scenesList[0].imageUrl;
+      // Store for Projects
+      if (!db.objectStoreNames.contains('projects')) {
+        const pStore = db.createObjectStore('projects', { keyPath: 'id' });
+        pStore.createIndex('userId', 'userId', { unique: false });
+        pStore.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
+
+      // Store for Scenes
+      if (!db.objectStoreNames.contains('scenes')) {
+        const sStore = db.createObjectStore('scenes', { keyPath: 'id' });
+        sStore.createIndex('projectId', 'projectId', { unique: false });
+        sStore.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+    };
+  });
+};
+
+const localPut = async (storeName: string, item: any) => {
+  try {
+    const db = await openLocalDB();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const req = store.put(item);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) { console.error("Local Put Failed", e); }
+};
+
+const localGet = async (storeName: string, id: string): Promise<any> => {
+  try {
+    const db = await openLocalDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const req = store.get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) { return null; }
+};
+
+const localGetAll = async (storeName: string): Promise<any[]> => {
+  try {
+    const db = await openLocalDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) { return []; }
+};
+
+const localGetFromIndex = async (storeName: string, indexName: string, value: string): Promise<any[]> => {
+  try {
+    const db = await openLocalDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const index = store.index(indexName);
+      const req = index.getAll(value);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) { return []; }
+}
+
+// Clear Database function for resetting state
+export const clearLocalDatabase = async () => {
+  try {
+    localStorage.removeItem(LS_AUTH_KEY);
+    if (typeof indexedDB !== 'undefined') {
+      const req = indexedDB.deleteDatabase(DB_NAME);
+      return new Promise<void>((resolve) => {
+        req.onsuccess = () => resolve();
+        req.onerror = () => resolve(); // Resolve anyway
+      });
+    }
+  } catch (e) { }
+};
+
+// --- HELPER FUNCTIONS FOR APP.TSX ---
+
+export const signInAsGuest = async () => {
+  try {
+    if (isFirebaseActive) {
+      const result = await signInAnonymously(auth);
+      return result.user;
+    } else {
+      throw new Error("Firebase inactive");
+    }
+  } catch (error: any) {
+    // Force fallback to Local Mode immediately if any error occurs
+    console.warn("Switching to Local Offline Mode due to:", error.message);
+    const mockUser = {
+      uid: MOCK_USER_ID,
+      isAnonymous: true,
+      displayName: 'Guest (Offline Mode)',
+      email: null,
+      photoURL: null,
+      emailVerified: false,
+      phoneNumber: null,
+      tenantId: null,
+      providerData: [],
+      metadata: {},
+      refreshToken: '',
+      delete: async () => { },
+      getIdToken: async () => 'mock-token',
+      getIdTokenResult: async () => ({} as any),
+      reload: async () => { },
+      toJSON: () => ({})
+    } as unknown as User;
+
+    localStorage.setItem(LS_AUTH_KEY, JSON.stringify(mockUser));
+    return mockUser;
+  }
+};
+
+export const signInUser = async () => {
+  if (!isFirebaseActive) return signInAsGuest();
+
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    localStorage.removeItem(LS_AUTH_KEY); // Clear local fallback if real auth works
+    return result.user;
+  } catch (error: any) {
+    if (error.code === 'auth/unauthorized-domain' || error.code === 'auth/operation-not-allowed') {
+      return signInAsGuest();
+    }
+    throw error;
+  }
+};
+
+export const logoutUser = async () => {
+  if (isFirebaseActive && auth.currentUser) {
+    await signOut(auth);
+  }
+  localStorage.removeItem(LS_AUTH_KEY);
+};
+
+export const getAuthInstance = () => auth;
+
+// --- PROJECT MANAGEMENT ---
+
+export const getOrCreateProject = async (userId: string, title: string): Promise<Project> => {
+  const activeUserId = userId || getGuestId(); // Auto-fallback to Guest ID
+
+  // Force local mode if Firebase is down or user is the mock user
+  if (activeUserId === MOCK_USER_ID || !isFirebaseActive || activeUserId.startsWith('guest_')) {
+    const projects = await localGetAll('projects');
+    const existing = projects.find((p: Project) => p.title === title && p.userId === userId);
+    if (existing) return existing;
+
+    const newProject: Project = {
+      id: `local-proj-${Date.now()}`,
+      userId,
+      title,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      sceneCount: 0,
+      scenes: []
+    };
+
+    await localPut('projects', newProject);
+    return newProject;
+  }
+
+  // QUERY SUBCOLLECTION: users/{userId}/projects
+  const projectsRef = collection(db, "users", userId, "projects");
+  const q = query(projectsRef, where("title", "==", title));
+  const snapshot = await getDocs(q);
+
+  if (!snapshot.empty) {
+    const docData = snapshot.docs[0].data();
+    return { id: snapshot.docs[0].id, ...docData } as Project;
+  }
+
+  const newProject: Omit<Project, 'id'> = {
+    userId,
+    title,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    sceneCount: 0,
+    scenes: []
+  };
+
+  const docRef = await addDoc(projectsRef, newProject);
+  return { id: docRef.id, ...newProject };
+};
+
+export const getUserProjects = async (userId: string): Promise<Project[]> => {
+  if (!userId) return [];
+
+  if (userId === MOCK_USER_ID || !isFirebaseActive) {
+    const projects = await localGetAll('projects');
+    return projects.sort((a: Project, b: Project) => b.updatedAt - a.updatedAt);
+  }
+
+  // QUERY SUBCOLLECTION: users/{userId}/projects
+  try {
+    const projectsRef = collection(db, "users", userId, "projects");
+    const q = query(projectsRef, orderBy("updatedAt", "desc"));
+    const snapshot = await getDocs(q);
+
+    const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+    console.log(`Fetched ${projects.length} projects for user ${userId}`);
+    return projects;
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    return [];
+  }
+};
+
+export const getProjectScenes = async (projectId: string): Promise<StoryScene[]> => {
+  if (!projectId) return [];
+  const authInstance = getAuth();
+  const userId = authInstance.currentUser?.uid || getGuestId();
+
+  if (projectId.startsWith('local-') || !isFirebaseActive) {
+    const scenes = await localGetFromIndex('scenes', 'projectId', projectId);
+    return scenes.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  }
+
+  const scenesRef = collection(db, "scenes");
+  const q = query(scenesRef, where("projectId", "==", projectId), orderBy("timestamp", "asc"));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StoryScene));
+}
+
+// --- STORAGE ---
+
+const sanitizeName = (name: string) => {
+  return name.replace(/[^a-z0-9]/gi, '_').toLowerCase().replace(/^_+|_+$/g, '');
+};
+
+export const uploadImageToStorage = async (userId: string, projectName: string, sceneTitle: string, imageData: string): Promise<string> => {
+  if (userId === MOCK_USER_ID || !isFirebaseActive) {
+    console.warn("Skipping Firebase Upload (Local Mode/Offline)");
+    return imageData;
+  }
+
+  const safeProjectName = sanitizeName(projectName) || 'untitled_project';
+  const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
+  const timestamp = Date.now();
+  const filename = `${safeSceneTitle}_${timestamp}.png`;
+  const path = `users/${userId}/${safeProjectName}/${filename}`;
+
+  try {
+    const storageRef = ref(storage, path);
+    let base64ToUpload = imageData;
+    if (imageData.startsWith('http')) {
+      base64ToUpload = await urlToBase64(imageData);
     }
 
-    await setDoc(projectRef, deployPayload, { merge: true });
-    console.log("Project metadata saved to Firestore:", project.id);
-
-  } catch (e) {
-    console.error("Failed to save project:", e);
+    await uploadString(storageRef, base64ToUpload, 'data_url');
+    const url = await getDownloadURL(storageRef);
+    console.log("Image Uploaded:", url);
+    return url;
+  } catch (error) {
+    console.error("Firebase Storage Upload FAILED:", error);
+    return imageData;
   }
 };
 

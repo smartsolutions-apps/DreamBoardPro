@@ -281,6 +281,16 @@ function App() {
           // 6. Save Scene Metadata
           if (activeProjectId) {
             await saveSceneToFirestore(activeProjectId, finalScene);
+
+            // 7. Auto-Save Project Progress (Stability Fix)
+            if (currentProject) {
+              await saveProject({
+                ...currentProject,
+                id: activeProjectId,
+                title: safeTitle,
+                sceneCount: finalScenes.length
+              }, finalScenes);
+            }
           }
 
           if (index === 0 && activeProjectId) {

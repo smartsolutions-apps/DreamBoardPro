@@ -57,6 +57,9 @@ function App() {
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* New Loading State for Serial Progress */
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
+
   const [draggedSceneIndex, setDraggedSceneIndex] = useState<number | null>(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -241,29 +244,41 @@ function App() {
       // Update UI with placeholders
       setScenes(initialScenes);
 
-      // Trigger Generation for each scene (Parallel execution with Promise.all to track completion)
-      const finalScenes = await Promise.all(initialScenes.map(async (scene, index) => {
+      const finalScenes: StoryScene[] = [];
+      const total = initialScenes.length;
+
+      // --- SERIAL PROCESSING LOOP (Fixes Network Congestion) ---
+      for (const [index, scene] of initialScenes.entries()) {
         try {
+          // Update Status
+          setProcessingStatus(`Rendering & Saving Scene ${index + 1} of ${total}...`);
+
+          // 1. Generate Image
           const base64Image = await generateSceneImage(scene.prompt, imageSize, aspectRatio, artStyle, colorMode, undefined, styleReference);
 
-          // 1. Show Image Immediately (Optimistic UI update)
+          // 2. Optimistic UI Update
           const localScene = { ...scene, imageUrl: base64Image, isLoading: false };
-          setScenes(currentScenes => currentScenes.map(s => s.id === scene.id ? localScene : s));
+          setScenes(current => current.map(s => s.id === scene.id ? localScene : s));
 
-          // 2. Upload to Storage
+          // 3. Strict Upload (Await to prevent congestion)
           let cloudUrl = base64Image;
           if (activeProjectId) {
-            cloudUrl = await uploadImageToStorage(user.uid, safeTitle, scene.title || `Scene ${index + 1}`, base64Image);
+            // Pass explicit index for strict sorting/naming
+            cloudUrl = await uploadImageToStorage(user.uid, safeTitle, `scene_${index + 1}`, base64Image);
           }
 
           const finalScene = { ...localScene, imageUrl: cloudUrl };
+          finalScenes.push(finalScene); // Add to completed list
 
-          // 3. Generate Tags (Non-blocking)
+          // 4. Update State with final URL
+          setScenes(current => current.map(s => s.id === scene.id ? finalScene : s));
+
+          // 5. Generate Tags (Background - non-blocking but safe)
           autoTagScene(scene.prompt, cloudUrl).then(tags => {
-            handleUpdateScene(scene.id, { tags }); // This safely updates state via existing method
+            handleUpdateScene(scene.id, { tags });
           });
 
-          // 4. Save individual scene to Firestore (Backup)
+          // 6. Save Scene Metadata
           if (activeProjectId) {
             await saveSceneToFirestore(activeProjectId, finalScene);
           }
@@ -272,18 +287,18 @@ function App() {
             await updateProjectThumbnail(activeProjectId, cloudUrl);
           }
 
-          return finalScene;
         } catch (err: any) {
           console.error(`Scene ${index} failed:`, err);
           const errorScene = { ...scene, isLoading: false, error: "Generation failed." };
-          setScenes(currentScenes => currentScenes.map(s => s.id === scene.id ? errorScene : s));
-          return errorScene;
+          setScenes(current => current.map(s => s.id === scene.id ? errorScene : s));
+          finalScenes.push(errorScene); // Ensure order assumes success or fail
         }
-      }));
+      }
 
-      // Update state with final list (ensures consistency)
+      // Final Consistency Update
       setScenes(finalScenes);
       setIsAnalyzing(false);
+      setProcessingStatus(null);
 
       // CRITICAL: Force Save Project immediately after ALL are done
       if (activeProjectId && currentProject) {

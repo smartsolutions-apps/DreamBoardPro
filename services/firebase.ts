@@ -369,6 +369,8 @@ export const uploadImageToStorage = async (userId: string, projectName: string, 
 
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
+  // Strict naming: project/scene_1_image.png 
+  // We keep timestamp to avoid browser caching issues on regenerate, but keep it clean
   const timestamp = Date.now();
   const filename = `${safeSceneTitle}_${timestamp}.png`;
   const path = `users/${userId}/${safeProjectName}/${filename}`;

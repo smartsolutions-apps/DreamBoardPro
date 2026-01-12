@@ -343,10 +343,10 @@ export const getProjectScenes = async (projectId: string): Promise<StoryScene[]>
 
 // --- STORAGE & SCENE SAVING (With Local Fallback) ---
 
-export const uploadImageToStorage = async (userId: string, projectName: string, sceneTitle: string, base64Image: string): Promise<string> => {
+export const uploadImageToStorage = async (userId: string, projectName: string, sceneTitle: string, imageData: string): Promise<string> => {
   if (userId === MOCK_USER_ID || !isFirebaseActive) {
     console.warn("Skipping Firebase Upload (Local Mode/Offline)");
-    return base64Image;
+    return imageData;
   }
 
   const safeProjectName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -364,12 +364,19 @@ export const uploadImageToStorage = async (userId: string, projectName: string, 
 
   try {
     const storageRef = ref(storage, path);
-    await uploadString(storageRef, base64Image, 'data_url');
+
+    // Ensure we have a base64 string
+    let base64ToUpload = imageData;
+    if (imageData.startsWith('http')) {
+      base64ToUpload = await urlToBase64(imageData);
+    }
+
+    await uploadString(storageRef, base64ToUpload, 'data_url');
     const url = await getDownloadURL(storageRef);
     return url;
   } catch (error) {
     console.error("Firebase Storage Upload FAILED:", error);
-    return base64Image;
+    return imageData;
   }
 };
 
@@ -426,4 +433,58 @@ export const updateProjectThumbnail = async (projectId: string, thumbnailUrl: st
 
   const projectRef = doc(db, "projects", projectId);
   await updateDoc(projectRef, { thumbnailUrl, updatedAt: Date.now() });
+};
+// --- HELPER FIXES ---
+
+export const urlToBase64 = async (url: string): Promise<string> => {
+  if (!url || !url.startsWith('http')) return url;
+  try {
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error("urlToBase64 Failed:", error);
+    return url;
+  }
+};
+
+export const uploadAudioToStorage = async (userId: string, sceneTitle: string, audioData: string): Promise<string> => {
+    if (userId === MOCK_USER_ID || !isFirebaseActive) return audioData;
+
+    const timestamp = Date.now();
+    const filename = `audio_${sceneTitle.replace(/[\s\W-]+/g, '_')}_${timestamp}.wav`;
+    const path = `users/${userId}/audio/${filename}`;
+
+    try {
+        const storageRef = ref(storage, path);
+        await uploadString(storageRef, audioData, 'data_url');
+        return await getDownloadURL(storageRef);
+    } catch (error) {
+        console.error("Audio Upload Failed:", error);
+        return audioData;
+    }
+};
+
+export const saveProject = async (project: Project) => {
+    if (!project.id) return;
+    console.log("SAVING TO FIREBASE:", project);
+
+    if (project.id.startsWith('local-') || !isFirebaseActive) {
+        await localPut('projects', project);
+        return;
+    }
+
+    try {
+        const projectRef = doc(db, "projects", project.id);
+        const { id, ...data } = project;
+        await setDoc(projectRef, { ...data, updatedAt: Date.now() }, { merge: true });
+    } catch (e) {
+        console.error("Failed to save project:", e);
+    }
 };

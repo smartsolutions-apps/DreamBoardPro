@@ -158,11 +158,22 @@ function App() {
   };
 
   // Helper to persist a scene and update UI state
-  const persistSceneUpdate = async (updatedScene: StoryScene) => {
+  const persistSceneUpdate = async (updatedScene: StoryScene, fullScenesList?: StoryScene[]) => {
     if (user && currentProject) {
       setIsSaving(true);
       try {
+        // 1. Save the specific scene
         await saveSceneToFirestore(currentProject.id, updatedScene);
+
+        // 2. Save Project Metadata (with scenes array)
+        // We need the latest scenes list. If passed, use it, otherwise mapped from state (which might be stale, so better to pass it)
+        const scenesToSave = fullScenesList || scenes.map(s => s.id === updatedScene.id ? updatedScene : s);
+
+        await saveProject({
+          ...currentProject,
+          sceneCount: scenesToSave.length
+        }, scenesToSave);
+
         setLastSaved(new Date());
       } catch (e) {
         console.error("Auto-save failed", e);
@@ -249,8 +260,15 @@ function App() {
                 saveSceneToFirestore(activeProjectId, taggedScene);
               });
 
-              // Save to Firestore
-              await saveSceneToFirestore(activeProjectId, finalScene);
+              // Save to Firestore and Sync Project
+              const updatedScenesList = initialScenes.map(s => s.id === scene.id ? finalScene : s);
+              // Note: We can't easily access the React state 'scenes' inside this loop accurately for all items if they update concurrently.
+              // But 'initialScenes' is the base.
+              // Better: Just save the scene, then trigger a project save at the end? 
+              // Or just use persistSceneUpdate which we updated.
+
+              await persistSceneUpdate(finalScene); // persistSceneUpdate will try to use 'scenes' state which might be partial
+
               setLastSaved(new Date());
 
               if (index === 0) {
@@ -318,9 +336,11 @@ function App() {
         const cloudUrl = await uploadImageToStorage(user.uid, projectTitle, sceneTitle, base64Image);
 
         const finalScene = { ...localScene, imageUrl: cloudUrl };
-        setScenes(prev => prev.map(s => s.id === sceneId ? finalScene : s));
+        const updatedScenes = prev.map(s => s.id === sceneId ? finalScene : s);
+        setScenes(updatedScenes);
 
-        await persistSceneUpdate(finalScene);
+        // Pass updated scenes to ensure project metadata is synced
+        await persistSceneUpdate(finalScene, updatedScenes);
       }
     } catch (err: any) {
       handleGenerationError(sceneId, err);

@@ -1028,7 +1028,7 @@ function App() {
                     {isAnalyzing ? (
                       <>
                         <RefreshCw size={20} className="animate-spin" />
-                        Analyzing Script...
+                        {processingStatus || "Analyzing Script..."}
                       </>
                     ) : (
                       <>

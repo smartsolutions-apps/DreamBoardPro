@@ -1,15 +1,24 @@
-import { 
-    auth, 
-    googleProvider, 
-    signInWithPopup, 
-    signInWithEmailAndPassword, 
-    createUserWithEmailAndPassword, 
-    signOut, 
+import {
+    auth,
+    googleProvider,
+    signInWithPopup,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
     updateProfile,
     signInAsGuest
 } from './firebase';
 
 const LS_AUTH_KEY = 'dreamBoard_localGuest';
+
+export const getGuestId = (): string => {
+    let guestId = localStorage.getItem('dreamBoard_guestId');
+    if (!guestId) {
+        guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('dreamBoard_guestId', guestId);
+    }
+    return guestId;
+};
 
 export const loginWithGoogle = async () => {
     try {
@@ -18,14 +27,14 @@ export const loginWithGoogle = async () => {
         return result.user;
     } catch (error: any) {
         console.error("Google Login Error", error);
-        
+
         // FIX: Fallback to Guest/Local mode if domain is not authorized (common in previews)
         if (error.code === 'auth/unauthorized-domain' || error.code === 'auth/operation-not-allowed') {
             console.warn("Domain unauthorized. Falling back to Guest Mode.");
             const guestUser = await signInAsGuest();
             return guestUser;
         }
-        
+
         throw error;
     }
 };

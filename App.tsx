@@ -436,7 +436,9 @@ function App() {
       // PERSIST AUDIO TO STORAGE
       let finalAudioUrl = audioUrl;
       if (user && currentProject) {
-        finalAudioUrl = await uploadAudioToStorage(user.uid, scene.title || `scene_${sceneId}`, audioUrl);
+        // Use sanitized project/scene names for pathing
+        const sceneTitle = scene.title || `scene_${sceneId}`;
+        finalAudioUrl = await uploadAudioToStorage(user.uid, projectTitle, sceneTitle, audioUrl);
       }
 
       const updatedScene = { ...scene, audioUrl: finalAudioUrl, isAudioLoading: false };
@@ -766,23 +768,39 @@ function App() {
               <span className="hidden sm:inline">{currentView === 'editor' ? 'Studio' : 'Editor'}</span>
             </button>
 
-            <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-3 ${!user || user.isAnonymous ? 'cursor-pointer hover:bg-gray-50 p-1 rounded-lg transition-colors' : ''}`}
+              onClick={() => {
+                if (!user || user.isAnonymous) {
+                  signInUser().then(setUser).catch(console.error);
+                }
+              }}
+            >
               <div className="hidden sm:flex flex-col items-end mr-2">
-                <span className="text-xs font-bold text-gray-700">{user.displayName || 'Creator'}</span>
-                <span className="text-[10px] text-gray-400">{user.email || 'Guest Mode'}</span>
+                <span className="text-xs font-bold text-gray-700">
+                  {user && !user.isAnonymous ? (user.displayName || 'Creator') : 'Guest User'}
+                </span>
+                <span className="text-[10px] text-gray-400">
+                  {user && !user.isAnonymous ? user.email : 'Click to Sign In'}
+                </span>
               </div>
-              {user.photoURL ? (
+              {user && !user.isAnonymous && user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-gray-200" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center"><UserIcon size={16} /></div>
               )}
-              <button
-                onClick={handleLogout}
-                className="p-2 text-gray-400 hover:text-red-500 transition hover:bg-red-50 rounded-lg"
-                title="Sign Out"
-              >
-                <LogOut size={20} />
-              </button>
+
+              {user && !user.isAnonymous && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent triggering sign-in
+                    handleLogout();
+                  }}
+                  className="p-2 text-gray-400 hover:text-red-500 transition hover:bg-red-50 rounded-lg"
+                  title="Sign Out"
+                >
+                  <LogOut size={20} />
+                </button>
+              )}
             </div>
 
             {currentView === 'editor' && (

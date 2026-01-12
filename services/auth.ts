@@ -12,12 +12,16 @@ import {
 const LS_AUTH_KEY = 'dreamBoard_localGuest';
 
 export const getGuestId = (): string => {
-    let guestId = localStorage.getItem('dreamBoard_guestId');
-    if (!guestId) {
-        guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('dreamBoard_guestId', guestId);
+    // FIX: Strictly reuse existing ID to prevent data loss on refresh
+    const existingId = localStorage.getItem('dreamBoard_guestId');
+    if (existingId) {
+        return existingId;
     }
-    return guestId;
+
+    // Generate new if totally missing
+    const newGuestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem('dreamBoard_guestId', newGuestId);
+    return newGuestId;
 };
 
 export const loginWithGoogle = async () => {

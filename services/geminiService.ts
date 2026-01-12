@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ImageSize, AspectRatio, ColorMode, ArtStyle } from "../types";
+import { urlToBase64 } from "./firebase";
 
 const getAiClient = () => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -377,7 +378,21 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
 
   try {
     const ai = getAiClient();
-    const base64Data = imageUrl.split(',')[1] || imageUrl;
+
+    let base64Data = "";
+
+    // CRITICAL FIX: Convert URL to Base64 if needed (CORS fix)
+    if (imageUrl.startsWith('http')) {
+      console.log("Fetching remote image for video generation...");
+      // This returns a data URI: "data:image/png;base64,..."
+      const dataUri = await urlToBase64(imageUrl);
+      // Strip prefix to get raw base64 string for the SDK
+      base64Data = dataUri.split(',')[1];
+    } else {
+      base64Data = imageUrl.split(',')[1] || imageUrl;
+    }
+
+    if (!base64Data) throw new Error("Failed to process input image for video");
 
     const veoRatio: '9:16' | '16:9' = aspectRatio === AspectRatio.Portrait ? '9:16' : '16:9';
 

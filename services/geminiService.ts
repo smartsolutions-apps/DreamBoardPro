@@ -17,6 +17,7 @@ const TTS_MODEL = "gemini-2.5-flash-preview-tts";
 
 // Helper to convert raw PCM (16-bit, 24kHz, Mono) to WAV for playback
 function pcmToWav(pcmBase64: string, sampleRate: number = 24000) {
+  if (!pcmBase64 || typeof pcmBase64 !== 'string') return "";
   const binaryString = atob(pcmBase64);
   const len = binaryString.length;
   const buffer = new ArrayBuffer(44 + len);
@@ -103,7 +104,7 @@ export const analyzeScript = async (script: string, sceneCount: number = 5): Pro
 };
 
 const cleanPromptText = (text: string): string => {
-  if (!text) return "";
+  if (!text || typeof text !== 'string') return "";
 
   // 1. Remove explicit labels like "PANEL 1:", "Scene 3 -", "Shot 5."
   let cleaned = text.replace(/^(PANEL|SCENE|SHOT|STORYBOARD|FRAME)\s*(\d+|[A-Z])?[:\-.]?\s*/i, '');
@@ -135,6 +136,14 @@ const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode) => {
   return `Create a storyboard image. Style: ${style}. Mode: ${colorInstruction}. Subject: ${cleanedPrompt}. Ensure high quality, detailed composition. Do not render text, titles, or UI elements.`;
 };
 
+// --- VALIDATION HELPER ---
+const isValidBase64 = (str: string) => {
+  if (!str || typeof str !== 'string') return false;
+  // If it starts with http, it failed conversion
+  if (str.startsWith('http') || str.startsWith('blob:')) return false;
+  return true;
+};
+
 export const generateSceneImage = async (
   prompt: string,
   size: ImageSize,
@@ -151,25 +160,34 @@ export const generateSceneImage = async (
     const parts: any[] = [];
 
     if (referenceImage) {
-      const base64Data = referenceImage.split(',')[1] || referenceImage;
-      parts.push({
-        inlineData: {
-          mimeType: 'image/png',
-          data: base64Data
-        }
-      });
-      parts.push({ text: `Use the FIRST attached image as a composition reference/sketch. ${fullPrompt}` });
+      if (isValidBase64(referenceImage)) {
+        const base64Data = referenceImage.split(',')[1] || referenceImage;
+        parts.push({
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64Data
+          }
+        });
+        parts.push({ text: `Use the FIRST attached image as a composition reference/sketch. ${fullPrompt}` });
+      } else {
+        console.warn("Invalid reference image passed to generate (likely URL/Failed fetch). Ignoring ref.");
+        // Still generate, just without ref
+      }
     }
 
     if (styleReferenceImage) {
-      const base64Data = styleReferenceImage.split(',')[1] || styleReferenceImage;
-      parts.push({
-        inlineData: {
-          mimeType: 'image/png',
-          data: base64Data
-        }
-      });
-      parts.push({ text: `Use the attached image as a STYLE reference. Copy the artistic style, color palette, and rendering technique of this image exactly.` });
+      if (isValidBase64(styleReferenceImage)) {
+        const base64Data = styleReferenceImage.split(',')[1] || styleReferenceImage;
+        parts.push({
+          inlineData: {
+            mimeType: 'image/png',
+            data: base64Data
+          }
+        });
+        parts.push({ text: `Use the attached image as a STYLE reference. Copy the artistic style, color palette, and rendering technique of this image exactly.` });
+      } else {
+        console.warn("Invalid style reference image passed. Ignoring.");
+      }
     }
 
     if (!referenceImage && !styleReferenceImage) {
@@ -212,6 +230,17 @@ export const refineSceneImage = async (
 ): Promise<string> => {
   try {
     const ai = getAiClient();
+
+    // GUARD: Ensure we have a string
+    if (!originalImage || typeof originalImage !== 'string') {
+      throw new Error("Invalid image source for refinement.");
+    }
+
+    // GUARD: Ensure valid base64 (not a URL)
+    if (!isValidBase64(originalImage)) {
+      throw new Error("Cannot refine image: Source is a URL or invalid. Please refresh or retry.");
+    }
+
     const base64Data = originalImage.split(',')[1] || originalImage;
     // We don't clean instruction here usually as it's a command, but we enforce style/mode
     const fullPrompt = `Edit this image: ${instruction}. Maintain the following style: ${style}, ${colorMode === ColorMode.BlackAndWhite ? 'Black & White' : 'Color'}. Keep composition similar. Do not add text.`;
@@ -255,8 +284,18 @@ export const upscaleImage = async (
 ): Promise<string> => {
   try {
     const ai = getAiClient();
-    const base64Data = originalImage.split(',')[1] || originalImage;
 
+    // GUARD: Ensure we have a string
+    if (!originalImage || typeof originalImage !== 'string') {
+      throw new Error("Invalid image source for upscale.");
+    }
+
+    // GUARD: Ensure valid base64
+    if (!isValidBase64(originalImage)) {
+      throw new Error("Cannot upscale image: Source is a URL. Please ensure image is fully loaded.");
+    }
+
+    const base64Data = originalImage.split(',')[1] || originalImage;
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
       contents: {
@@ -326,7 +365,7 @@ export const checkContinuity = async (scenes: { title: string, prompt: string, i
 
     scenes.forEach((s, i) => {
       parts.push({ text: `\n--- SCENE ${i} (Index ${i}): ${s.title} ---\nDescription: ${s.prompt}\n` });
-      if (s.imageUrl) {
+      if (s.imageUrl && isValidBase64(s.imageUrl)) {
         const base64Data = s.imageUrl.split(',')[1] || s.imageUrl;
         parts.push({
           inlineData: {
@@ -335,7 +374,7 @@ export const checkContinuity = async (scenes: { title: string, prompt: string, i
           }
         });
       } else {
-        parts.push({ text: "[Image not yet generated]" });
+        parts.push({ text: "[Image not yet generated or invalid]" });
       }
     });
 
@@ -378,17 +417,26 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
 
   try {
     const ai = getAiClient();
-
     let base64Data = "";
+
+    // GUARD: Ensure we have a string
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      throw new Error("Invalid image input for video generation.");
+    }
 
     // CRITICAL FIX: Convert URL to Base64 if needed (CORS fix)
     if (imageUrl.startsWith('http')) {
       console.log("Fetching remote image for video generation...");
-      // This returns a data URI: "data:image/png;base64,..."
       const dataUri = await urlToBase64(imageUrl);
-      // Strip prefix to get raw base64 string for the SDK
+
+      // If conversion fails, urlToBase64 returns the original URL. Check again:
+      if (dataUri.startsWith('http')) {
+        throw new Error("Failed to fetch/convert image for video. Please ensure image is accessible.");
+      }
+
       base64Data = dataUri.split(',')[1];
     } else {
+      // Must be base64
       base64Data = imageUrl.split(',')[1] || imageUrl;
     }
 
@@ -411,8 +459,6 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
         aspectRatio: veoRatio
       }
     });
-
-    console.log("Video Operation Started:", operation);
 
     // Safety timeout loop (max 5 minutes)
     let attempts = 0;
@@ -482,7 +528,7 @@ export const autoTagScene = async (prompt: string, image?: string): Promise<stri
     const ai = getAiClient();
     const parts: any[] = [{ text: `Generate 3-5 short descriptive tags (single words) for this scene for organization (e.g., 'outdoor', 'action', 'sad'). Return JSON string array.` }];
 
-    if (image) {
+    if (image && isValidBase64(image)) {
       const base64Data = image.split(',')[1] || image;
       parts.push({ inlineData: { mimeType: 'image/png', data: base64Data } });
     }

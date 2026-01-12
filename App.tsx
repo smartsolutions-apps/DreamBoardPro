@@ -263,8 +263,18 @@ function App() {
           // 3. Strict Upload (Await to prevent congestion)
           let cloudUrl = base64Image;
           if (activeProjectId) {
-            // Pass explicit index for strict sorting/naming
-            cloudUrl = await uploadImageToStorage(user.uid, safeTitle, `scene_${index + 1}`, base64Image);
+            try {
+              // Pass explicit index for strict sorting/naming
+              cloudUrl = await uploadImageToStorage(user.uid, safeTitle, `scene_${index + 1}`, base64Image);
+
+              // Validate Upload Success
+              if (!cloudUrl || !cloudUrl.startsWith('http')) {
+                throw new Error("Storage returned invalid URL (Upload Failed)");
+              }
+            } catch (uploadErr) {
+              console.error(`Storage Upload Failed for Scene ${index + 1}:`, uploadErr);
+              throw new Error("Image generated but failed to save to cloud. Please Retry.");
+            }
           }
 
           const finalScene = { ...localScene, imageUrl: cloudUrl };
@@ -299,7 +309,7 @@ function App() {
 
         } catch (err: any) {
           console.error(`Scene ${index} failed:`, err);
-          const errorScene = { ...scene, isLoading: false, error: "Generation failed." };
+          const errorScene = { ...scene, isLoading: false, error: err.message || "Generation failed." };
           setScenes(current => current.map(s => s.id === scene.id ? errorScene : s));
           finalScenes.push(errorScene); // Ensure order assumes success or fail
         }
@@ -374,7 +384,13 @@ function App() {
       // 3. Upload & Persist
       let finalUrl = base64Image;
       if (user && currentProject) {
-        finalUrl = await uploadImageToStorage(user.uid, projectTitle, safeIndex, base64Image);
+        try {
+          finalUrl = await uploadImageToStorage(user.uid, projectTitle, safeIndex, base64Image);
+          if (!finalUrl.startsWith('http')) throw new Error("Storage Upload Failed");
+        } catch (e) {
+          console.error("Upload failed during regeneration", e);
+          throw new Error("Image generated but failed to save. Please retry.");
+        }
       }
 
       // 4. Update State ONLY after success
@@ -416,7 +432,13 @@ function App() {
       // 3. Upload
       let finalUrl = base64Image;
       if (user && currentProject) {
-        finalUrl = await uploadImageToStorage(user.uid, projectTitle, safeIndex, base64Image);
+        try {
+          finalUrl = await uploadImageToStorage(user.uid, projectTitle, safeIndex, base64Image);
+          if (!finalUrl.startsWith('http')) throw new Error("Storage Upload Failed");
+        } catch (e) {
+          console.error("Upload failed during refine", e);
+          throw new Error("Refinement successful but save failed. Please retry.");
+        }
       }
 
       // 4. Update State
@@ -454,7 +476,12 @@ function App() {
       // 3. Upload
       let finalUrl = base64Image;
       if (user && currentProject) {
-        finalUrl = await uploadImageToStorage(user.uid, projectTitle, safeIndex, base64Image);
+        try {
+          finalUrl = await uploadImageToStorage(user.uid, projectTitle, safeIndex, base64Image);
+          if (!finalUrl.startsWith('http')) throw new Error("Storage Upload Failed");
+        } catch (e) {
+          throw new Error("Upscale successful but save failed. Please retry.");
+        }
       }
 
       // 4. Update State

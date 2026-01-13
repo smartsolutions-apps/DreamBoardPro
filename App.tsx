@@ -107,7 +107,7 @@ function App() {
     setScript('');
     setProjectTitle('');
     setCurrentProject(null);
-    setGeneratedImages({});
+    setCurrentProject(null);
     setLastSaved(null);
     setCharacterSheet('');
     localStorage.removeItem('cached_story'); // Remove generic cache

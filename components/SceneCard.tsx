@@ -568,11 +568,12 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             </div>
 
             <button
-              onClick={handleCopyImage}
-              title="Copy Link/Image"
-              className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors relative"
+              onClick={handleRegenerate}
+              disabled={isLoading}
+              title={`Regenerate with style: ${style || 'Current Settings'}`}
+              className={`p-2 rounded-full transition-colors ${isLoading ? 'bg-gray-100 text-gray-400' : 'hover:bg-blue-100 text-blue-600'}`}
             >
-              {copyFeedback ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
             </button>
 
             <div className="relative">

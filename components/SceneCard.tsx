@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { RefreshCw, Download, Edit2, Check, X, GripVertical, AlertCircle, Image as ImageIcon, Sparkles, Upload, Copy, Clock, RotateCcw, Zap, Sliders, Palette, Link as LinkIcon, Pencil, Save, Play, SplitSquareHorizontal, Type, Video, Music, Tag as TagIcon, Volume2, Maximize2, MoreHorizontal } from 'lucide-react';
+import { RefreshCw, Download, Edit2, Check, X, GripVertical, AlertCircle, Image as ImageIcon, Sparkles, Upload, Copy, Clock, RotateCcw, Zap, Sliders, Palette, Link as LinkIcon, Pencil, Save, Play, SplitSquareHorizontal, Type, Video, Music, Tag as TagIcon, Volume2, Maximize2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { StoryScene, ShotType, AspectRatio, SceneVersion, SceneFilter, SceneTransition, TextStyle } from '../types';
 import { SketchPad } from './SketchPad';
 

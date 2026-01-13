@@ -101,6 +101,27 @@ function App() {
     localStorage.setItem('dreamBoard_templates', JSON.stringify(customTemplates));
   }, [customTemplates]);
 
+  // --- CRITICAL: SESSION ISOLATION HANDLER ---
+  const wipeSession = () => {
+    setScenes([]);
+    setScript('');
+    setProjectTitle('');
+    setCurrentProject(null);
+    setGeneratedImages({});
+    setLastSaved(null);
+    setCharacterSheet('');
+    localStorage.removeItem('cached_story'); // Remove generic cache
+    // Note: We deliberately KEEP user_prefs (Global Settings like size/style)
+  };
+
+  useEffect(() => {
+    // When user changes (login or logout), we MUST wipe the session to prevent data leaks.
+    // If logging in, we wipe first, then the loadProjects will trigger.
+    // If logging out, we wipe immediately.
+    wipeSession();
+  }, [user]); // Runs whenever auth state changes (null -> user OR user -> null)
+  // -------------------------------------------
+
   // --- SETTINGS PERSISTENCE ---
   useEffect(() => {
     localStorage.setItem('user_prefs', JSON.stringify({
@@ -265,14 +286,11 @@ function App() {
 
   const handleLogout = async () => {
     await logout();
+    wipeSession(); // Ensure strict wipe
     setUser(null);
     setCurrentView('studio');
-    setScenes([]);
-    setScript('');
-    setCurrentProject(null);
-    setProjectTitle('');
     setProjects([]);
-    window.location.reload(); // Ensure clean state
+    window.location.reload(); // Hard refresh to clear any in-memory clutter
   };
 
   const handleNewProject = async () => {

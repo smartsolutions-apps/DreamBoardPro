@@ -262,7 +262,10 @@ function App() {
 
           // 3. Strict Upload (Await to prevent congestion)
           // Ensure valid user ID exists before upload
-          const currentUserId = user ? user.uid : getGuestId();
+          const authInstance = getAuthInstance();
+          const currentUserId = authInstance.currentUser?.uid || getGuestId();
+
+          if (!currentUserId) throw new Error("No user ID found for upload");
 
           // Mark as uploading but keep image visible
           setScenes(current => current.map(s => s.id === scene.id ? { ...localScene, isUploading: true, uploadError: false } : s));
@@ -432,7 +435,17 @@ function App() {
     // 1. Set Loading
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
     const scene = scenes.find(s => s.id === sceneId);
-    if (!scene?.imageUrl) return;
+
+    // GUARD: Check if image exists before editing to prevent crashes
+    if (!scene?.imageUrl) {
+      // alert("Please wait for upload to finish before editing."); // Alert typically bad UX, better to just reset
+      // Actually user requested toast. I'll use console.warn and reset state for now as I don't have a toast component handy.
+      // Wait, user explicitly said: "show a toast: 'Please wait...'... instead of crashing".
+      // I will use alert() as simple toast proxy since I don't have a toast system.
+      alert("Please wait for upload to finish before editing.");
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
+      return;
+    }
 
     try {
       let sourceImage = scene.imageUrl;
@@ -633,7 +646,11 @@ function App() {
 
     try {
       // Ensure valid user ID
-      const currentUserId = user ? user.uid : getGuestId();
+      const authInstance = getAuthInstance();
+      const currentUserId = authInstance.currentUser?.uid || getGuestId();
+
+      if (!currentUserId) throw new Error("No user ID found for upload");
+
       const sceneIndex = scenes.findIndex(s => s.id === sceneId);
 
       // 2. Upload

@@ -706,7 +706,9 @@ function App() {
       await persistSceneUpdate(updatedScene, updatedScenes);
 
     } catch (err: any) {
-      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isVideoLoading: false, error: err.message || "Video generation failed" } : s));
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, error: err.message || "Video generation failed" } : s));
+    } finally {
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isVideoLoading: false } : s));
     }
   };
 
@@ -743,6 +745,7 @@ function App() {
 
     } catch (err: any) {
       console.error("Audio generation error", err);
+    } finally {
       setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isAudioLoading: false } : s));
     }
   };

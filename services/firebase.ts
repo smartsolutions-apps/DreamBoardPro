@@ -377,17 +377,18 @@ export const uploadImageToStorage = async (userId: string | undefined | null, pr
   const effectiveUserId = userId || 'temp_guest';
   const isGuest = effectiveUserId === 'temp_guest';
 
-  const safeProjectName = sanitizeName(projectName) || 'untitled_project';
+  // FIX: Use safeTitle as requested
+  const safeTitle = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
   const fullDate = getCompactDate();
 
   // Strict Naming: ProjectName_SceneTitle_Date.png
-  const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.png`;
+  const filename = `${safeTitle}_${safeSceneTitle}_${fullDate}.png`;
 
   // Use a special folder for guests so we can clean it up later or migrate it
   const path = isGuest
-    ? `temp_guests/${safeProjectName}/${filename}`
-    : `users/${effectiveUserId}/${safeProjectName}/${filename}`;
+    ? `temp_guests/${safeTitle}/${filename}`
+    : `users/${effectiveUserId}/${safeTitle}/${filename}`;
 
   try {
     const storageRef = ref(storage, path);

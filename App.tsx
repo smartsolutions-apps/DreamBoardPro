@@ -107,7 +107,7 @@ function App() {
         // PERF: Create lightweight scenes (No Base64) to prevent QuotaExceededError
         const lightweightScenes = scenes.map(s => ({
           ...s,
-          imageUrl: s.imageUrl?.startsWith('data:') ? null : s.imageUrl, // Only keep cloud URLs
+          imageUrl: s.imageUrl?.startsWith('data:') ? "[IMAGE_SAVED_IN_CLOUD]" : s.imageUrl, // Only keep cloud URLs
           versions: [] // Don't cache version history (too heavy)
         }));
 
@@ -254,6 +254,8 @@ function App() {
   };
 
   const handleAnalyze = async () => {
+    // FIX: Define safeTitle to prevent ReferenceError
+    const safeTitle = projectTitle ? projectTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'untitled_project';
     let activeProjectId = currentProject?.id;
 
     // Only create project if user is logged in

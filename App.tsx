@@ -539,23 +539,22 @@ function App() {
         characterSheet
       );
 
-      // Calculate index for strict naming
+      // 3. Upload Immediately (Universal Persistence)
       const sceneIndex = scenes.findIndex(s => s.id === sceneId);
-      const safeIndex = sceneIndex >= 0 ? sceneIndex : scenes.length; // Default to end if not found
+      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
 
-      // 3. Upload & Persist
+      // strict naming: scene_001_regen_123456789
+      const storageName = `scene_${String(indexNum).padStart(3, '0')}_regen_${Date.now()}`;
+
       let finalUrl = base64Image;
-
       try {
-        // Allow Guest Upload
-        finalUrl = await uploadImageToStorage(user, projectTitle, safeIndex, base64Image);
+        finalUrl = await uploadImageToStorage(user || 'guest', projectTitle || 'Untitled', storageName, base64Image);
       } catch (e) {
         console.error("Upload failed during regeneration", e);
-        throw new Error("Image generated but failed to save. Please retry.");
+        // Fallback to base64 but warn
       }
 
-
-      // 4. Update State ONLY after success
+      // 4. Update State
       const scene = scenes.find(s => s.id === sceneId);
       const finalScene = { ...scene!, imageUrl: finalUrl, prompt, isLoading: false };
 
@@ -563,7 +562,7 @@ function App() {
       setScenes(updatedScenes);
 
       // 5. Save to DB
-      if (user && currentProject) {
+      if (currentProject) {
         await persistSceneUpdate(finalScene, updatedScenes);
       }
 
@@ -577,7 +576,7 @@ function App() {
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
     const scene = scenes.find(s => s.id === sceneId);
 
-    // GUARD: Check if image exists and is SAVED before editing to prevent crashes
+    // GUARD: Check if image exists
     if (!scene?.imageUrl || !scene.imageUrl.startsWith('http')) {
       alert("Please wait for the image to save to the cloud before editing.");
       setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
@@ -586,6 +585,7 @@ function App() {
 
     try {
       let sourceImage = scene.imageUrl;
+      // Always ensure base64 source
       if (sourceImage.startsWith('http')) {
         sourceImage = await urlToBase64(sourceImage);
       }
@@ -593,19 +593,17 @@ function App() {
       // 2. Generate
       const base64Image = await refineSceneImage(sourceImage, instruction, imageSize, aspectRatio, artStyle, colorMode);
 
-      // Calculate index
+      // 3. Upload Immediately
       const sceneIndex = scenes.findIndex(s => s.id === sceneId);
-      const safeIndex = scenes.findIndex(s => s.id === sceneId);
+      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
 
-      // 3. Upload
+      const storageName = `scene_${String(indexNum).padStart(3, '0')}_edit_${Date.now()}`;
+
       let finalUrl = base64Image;
-
       try {
-        finalUrl = await uploadImageToStorage(user, projectTitle, safeIndex, base64Image);
-        // if (!finalUrl.startsWith('http')) throw new Error("Storage Upload Failed");
+        finalUrl = await uploadImageToStorage(user || 'guest', projectTitle || 'Untitled', storageName, base64Image);
       } catch (e) {
         console.error("Upload failed during refine", e);
-        // proceed with local base64 if upload fails
       }
 
       // 4. Update State
@@ -613,7 +611,7 @@ function App() {
       const updatedScenes = scenes.map(s => s.id === sceneId ? localScene : s);
       setScenes(updatedScenes);
 
-      if (user && currentProject) {
+      if (currentProject) {
         await persistSceneUpdate(localScene, updatedScenes);
       }
 
@@ -623,7 +621,6 @@ function App() {
   }, [scenes, imageSize, aspectRatio, artStyle, colorMode, user, projectTitle, currentProject]);
 
   const handleUpscale = useCallback(async (sceneId: string) => {
-    // 1. Set Loading
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene?.imageUrl) return;
@@ -634,26 +631,24 @@ function App() {
         sourceImage = await urlToBase64(sourceImage);
       }
 
-      // 2. Generate
       const base64Image = await upscaleImage(sourceImage, aspectRatio);
 
-      // Calculate index
-      const safeIndex = scenes.findIndex(s => s.id === sceneId);
+      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
+      const storageName = `scene_${String(indexNum).padStart(3, '0')}_upscale_${Date.now()}`;
 
-      // 3. Upload
       let finalUrl = base64Image;
       try {
-        finalUrl = await uploadImageToStorage(user, projectTitle, safeIndex, base64Image);
+        finalUrl = await uploadImageToStorage(user || 'guest', projectTitle || 'Untitled', storageName, base64Image);
       } catch (e) {
-        // throw new Error("Upscale successful but save failed. Please retry.");
+        console.error("Upscale upload failed", e);
       }
 
-      // 4. Update State
       const localScene = { ...scene, imageUrl: finalUrl, isLoading: false };
       const updatedScenes = scenes.map(s => s.id === sceneId ? localScene : s);
       setScenes(updatedScenes);
 
-      if (user && currentProject) {
+      if (currentProject) {
         await persistSceneUpdate(localScene, updatedScenes);
       }
     } catch (err: any) {
@@ -671,11 +666,23 @@ function App() {
       const videoUrl = await generateSceneVideo(scene.imageUrl, scene.prompt, aspectRatio);
 
       let finalVideoUrl = videoUrl;
-      const safeIndex = scenes.findIndex(s => s.id === sceneId);
+      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
+      // Fix: Ensure strict string naming
+      const storageName = `scene_${String(indexNum).padStart(3, '0')}_video_${Date.now()}`; // Unique name
 
-      if (true) {
-        // Strict Upload: Ensure we own the asset (or guest upload)
-        finalVideoUrl = await uploadVideoToStorage(user, projectTitle, scene.title || `scene_${safeIndex + 1}`, videoUrl);
+      try {
+        // Convert URL to Base64/Blob Data for Upload
+        const videoData = await urlToBase64(videoUrl); // Re-use helper
+
+        finalVideoUrl = await uploadVideoToStorage(
+          user || 'guest',
+          projectTitle || 'Untitled',
+          storageName,
+          videoData
+        );
+      } catch (uploadErr) {
+        console.error("Video upload failed, keeping original URL", uploadErr);
       }
 
       const updatedScene = { ...scene, videoUrl: finalVideoUrl, isVideoLoading: false };
@@ -696,12 +703,22 @@ function App() {
     try {
       const audioUrl = await generateNarration(scene.prompt);
 
-      // PERSIST AUDIO TO STORAGE
       let finalAudioUrl = audioUrl;
-      const safeIndex = scenes.findIndex(s => s.id === sceneId);
+      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
 
-      if (true) {
-        finalAudioUrl = await uploadAudioToStorage(user, projectTitle, safeIndex, audioUrl);
+      const storageName = `scene_${String(indexNum).padStart(3, '0')}_audio_${Date.now()}`;
+
+      try {
+        const audioData = await urlToBase64(audioUrl);
+        finalAudioUrl = await uploadAudioToStorage(
+          user || 'guest',
+          projectTitle || 'Untitled',
+          storageName,
+          audioData
+        );
+      } catch (uploadErr) {
+        console.error("Audio upload failed", uploadErr);
       }
 
       const updatedScene = { ...scene, audioUrl: finalAudioUrl, isAudioLoading: false };

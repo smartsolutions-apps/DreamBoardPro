@@ -189,11 +189,22 @@ const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode, mast
   }
 
   // 3. Construct Prompt: [STYLE] + [COLOR] + [CHARACTERS] + [SCENE]
+  // 3. Construct Prompt: [STYLE] + [COLOR] + [CHARACTERS] + [SCENE]
+  // FORCE: Style must be at the very start for Gemini/Imagen effectiveness.
+  const styleHeader = `
+  *** ART STYLE ENFORCEMENT ***
+  STYLE: ${style}
+  VISUAL DESCRIPTION: ${styleDescription}
+  STRICT RULE: Do NOT generate realistic photos. Do NOT generate photorealism.
+  Must look like a ${style} illustration.
+  `;
+
   return `
-    Create a professional storyboard image.
-    VISUAL STYLE: ${styleDescription}
+    ${styleHeader}
+    
     COLOR PALETTE: ${colorInstruction}
     ${characterSheet ? `CHARACTERS (MAINTAIN CONSISTENCY): ${characterSheet}` : ''}
+    
     SCENE ACTION: ${cleanedPrompt}
     
     Ensure high quality, detailed composition. Do not render text, titles, or UI elements.

@@ -440,10 +440,10 @@ export const saveSceneToFirestore = async (projectId: string, scene: StoryScene)
   if (scene.id.startsWith('scene-')) {
     // It's a temp ID, might want a real one, but usually we just setDoc with the ID we generated
     const docRef = doc(db, "scenes", scene.id);
-    await setDoc(docRef, cleanScene);
+    await setDoc(docRef, sanitizeForFirestore(cleanScene));
   } else {
     const docRef = doc(db, "scenes", scene.id);
-    await setDoc(docRef, cleanScene, { merge: true });
+    await setDoc(docRef, sanitizeForFirestore(cleanScene), { merge: true });
   }
 
   // 2. TRIGGER PROJECT UPDATE (Vital for Metadata)
@@ -574,6 +574,18 @@ export const uploadVideoToStorage = async (userOrId: any, projectName: string, s
   }
 };
 
+// --- SANITIZATION HELPER (CRITICAL FOR FIRESTORE) ---
+const sanitizeForFirestore = (obj: any): any => {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+  const newObj: any = {};
+  for (const key in obj) {
+    newObj[key] = sanitizeForFirestore(obj[key]);
+  }
+  return newObj;
+};
+
 export const saveProject = async (project: Project, scenesList?: StoryScene[]) => {
   if (!project.id) return;
 
@@ -613,7 +625,10 @@ export const saveProject = async (project: Project, scenesList?: StoryScene[]) =
       }
     }
 
-    await setDoc(projectRef, deployPayload, { merge: true });
+    // SANITIZE BEFORE SAVE
+    const cleanPayload = sanitizeForFirestore(deployPayload);
+
+    await setDoc(projectRef, cleanPayload, { merge: true });
     console.log("🔥 SUCCESS: Project saved to DB", project.id);
 
   } catch (e) {

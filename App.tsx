@@ -333,7 +333,7 @@ function App() {
 
     // --- INSTANT LOCK UI ---
     setIsAnalyzing(true);
-    setProcessingStatus("Initializing AI Engine...");
+    setProcessingStatus("Generating...");
     // -----------------------
 
     // Only create project if user is logged in
@@ -1363,7 +1363,7 @@ function App() {
                     {isAnalyzing ? (
                       <>
                         <RefreshCw size={20} className="animate-spin" />
-                        {processingStatus || "Analyzing Script..."}
+                        {processingStatus || "Generating..."}
                       </>
                     ) : (
                       <>

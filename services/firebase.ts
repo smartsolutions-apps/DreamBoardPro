@@ -377,8 +377,10 @@ export const uploadImageToStorage = async (userId: string | undefined | null, pr
   const effectiveUserId = userId || 'temp_guest';
   const isGuest = effectiveUserId === 'temp_guest';
 
-  // FIX: Use safeTitle as requested
+  // FIX: Define safeTitle explicitly to prevent ReferenceError
   const safeTitle = sanitizeName(projectName) || 'untitled_project';
+  const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
+  const fullDate = getCompactDate();
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
   const fullDate = getCompactDate();
 

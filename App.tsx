@@ -100,6 +100,18 @@ function App() {
     localStorage.setItem('dreamBoard_templates', JSON.stringify(customTemplates));
   }, [customTemplates]);
 
+  // --- SETTINGS PERSISTENCE ---
+  useEffect(() => {
+    localStorage.setItem('cached_settings', JSON.stringify({
+      sceneCount,
+      aspectRatio,
+      artStyle,
+      colorMode,
+      styleReference,
+      imageSize
+    }));
+  }, [sceneCount, aspectRatio, artStyle, colorMode, styleReference, imageSize]);
+
   // --- SAFTEY NET: LOCAL CACHING ---
   useEffect(() => {
     if (scenes.length > 0 || script.trim()) {
@@ -126,6 +138,20 @@ function App() {
   useEffect(() => {
     // RESTORE ON MOUNT
     const cached = localStorage.getItem('cached_story');
+    const cachedSettings = localStorage.getItem('cached_settings');
+
+    if (cachedSettings) {
+      try {
+        const settings = JSON.parse(cachedSettings);
+        if (settings.sceneCount) setSceneCount(settings.sceneCount);
+        if (settings.aspectRatio) setAspectRatio(settings.aspectRatio);
+        if (settings.artStyle) setArtStyle(settings.artStyle);
+        if (settings.colorMode) setColorMode(settings.colorMode);
+        if (settings.styleReference) setStyleReference(settings.styleReference);
+        if (settings.imageSize) setImageSize(settings.imageSize);
+      } catch (e) { console.error("Failed to restore settings", e); }
+    }
+
     if (cached && !scenes.length && !script) {
       try {
         const data = JSON.parse(cached);
@@ -209,10 +235,23 @@ function App() {
     window.location.reload(); // Ensure clean state
   };
 
-  const handleResetData = async () => {
-    if (window.confirm("This will clear all locally saved data (guest mode projects) and log you out. Continue?")) {
-      await clearLocalDatabase();
-      window.location.reload();
+  const handleNewProject = async () => {
+    if (window.confirm("Start a new project? This will clear your current workspace.")) {
+      // 1. Clear Cache
+      localStorage.removeItem('cached_story');
+      // Note: We deliberately KEEP cached_settings
+
+      // 2. Reset State
+      setScript('');
+      setScenes([]);
+      setProjectTitle('');
+      setCurrentProject(null);
+      setLastSaved(null);
+
+      // 3. UX
+      window.scrollTo(0, 0);
+      setIsLibraryOpen(false);
+      setShowAnimatic(false);
     }
   };
 
@@ -1038,20 +1077,14 @@ function App() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={handleResetData}
+                  onClick={handleNewProject}
                   className="bg-gray-100 text-gray-600 px-4 py-3 rounded-xl font-bold shadow-sm hover:bg-red-50 hover:text-red-600 flex items-center gap-2 transition-transform hover:-translate-y-1"
                   title="Clear Local Storage Cache"
                 >
                   <Trash2 size={18} /> <span className="hidden sm:inline">Reset Cache</span>
                 </button>
                 <button
-                  onClick={() => {
-                    setCurrentProject(null);
-                    setProjectTitle('');
-                    setScenes([]);
-                    setScript('');
-                    setCurrentView('editor');
-                  }}
+                  onClick={handleNewProject}
                   className="bg-brand-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-brand-700 flex items-center gap-2 transition-transform hover:-translate-y-1"
                 >
                   <Plus size={20} /> New Project
@@ -1087,13 +1120,7 @@ function App() {
               ))}
 
               <div
-                onClick={() => {
-                  setCurrentProject(null);
-                  setProjectTitle('');
-                  setScenes([]);
-                  setScript('');
-                  setCurrentView('editor');
-                }}
+                onClick={handleNewProject}
                 className="border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center p-8 cursor-pointer hover:border-brand-400 hover:bg-brand-50 transition-all group min-h-[200px]"
               >
                 <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-200 group-hover:text-brand-600 transition-colors">

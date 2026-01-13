@@ -398,6 +398,7 @@ export const uploadImageToStorage = async (userId: string | undefined | null, pr
 
     await uploadString(storageRef, base64ToUpload, 'data_url');
     const url = await getDownloadURL(storageRef);
+    console.log(`✅ FILE UPLOADED TO: ${path}`); // Critical Audit Log
     console.log(`Image Uploaded (${isGuest ? 'GUEST' : 'USER'}):`, url);
     return url;
   } catch (error) {

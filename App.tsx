@@ -103,12 +103,23 @@ function App() {
   // --- SAFTEY NET: LOCAL CACHING ---
   useEffect(() => {
     if (scenes.length > 0 || script.trim()) {
-      localStorage.setItem('cached_story', JSON.stringify({
-        projectTitle,
-        script,
-        scenes,
-        lastSaved: new Date().toISOString()
-      }));
+      try {
+        // PERF: Create lightweight scenes (No Base64) to prevent QuotaExceededError
+        const lightweightScenes = scenes.map(s => ({
+          ...s,
+          imageUrl: s.imageUrl?.startsWith('data:') ? null : s.imageUrl, // Only keep cloud URLs
+          versions: [] // Don't cache version history (too heavy)
+        }));
+
+        localStorage.setItem('cached_story', JSON.stringify({
+          projectTitle,
+          script,
+          scenes: lightweightScenes,
+          lastSaved: new Date().toISOString()
+        }));
+      } catch (e) {
+        console.warn("LocalStorage Cache Failed (Quota Exceeded likely)", e);
+      }
     }
   }, [scenes, script, projectTitle]);
 

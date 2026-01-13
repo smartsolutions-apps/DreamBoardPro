@@ -561,9 +561,12 @@ function App() {
       // Resolve consistency data
       const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
 
+      // FORCE: Enforce Style and Reference in the prompt itself
+      const finalPrompt = `${masterStylePrompt} . ${scene.description || prompt} . Keep character consistent with reference.`;
+
       // 2. Generate Image
       const base64Image = await generateSceneImage(
-        prompt,
+        finalPrompt,
         imageSize,
         aspectRatio,
         artStyle,
@@ -781,7 +784,11 @@ function App() {
       await persistSceneUpdate(updatedScene, updatedScenes);
 
     } catch (err: any) {
-      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, error: err.message || "Video generation failed" } : s));
+      if (err.toString().includes('429')) {
+        handleGenerationError(sceneId, new Error("Daily Video Limit Reached (Google Quota). Please try again tomorrow."));
+      } else {
+        setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, error: err.message || "Video generation failed" } : s));
+      }
     } finally {
       setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isVideoLoading: false } : s));
     }

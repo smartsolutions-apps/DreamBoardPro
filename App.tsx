@@ -1499,6 +1499,13 @@ function App() {
         )}
       </main>
 
+      {showAnimatic && (
+        <AnimaticPlayer
+          scenes={filteredScenes}
+          onClose={() => setShowAnimatic(false)}
+        />
+      )}
+
       <ChatWidget />
     </div>
   );

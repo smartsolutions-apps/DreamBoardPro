@@ -3,7 +3,7 @@ import { ImageSize, AspectRatio, ColorMode, ArtStyle } from "../types";
 import { urlToBase64 } from "./firebase";
 
 // --- STYLE DEFINITIONS ---
-const STYLE_DEFINITIONS: Record<string, string> = {
+export const STYLE_DEFINITIONS: Record<string, string> = {
   "Pencil Sketch": "Rough graphite textures, visible cross-hatching, sketch paper grain, loose and expressive lines, artistic shading.",
   "Ink & Line Art": "Clean crisp black ink lines, cross-hatching shading, comic book inking style, high contrast, no gradients.",
   "Minimalist Vector": "Flat colors, geometric shapes, clean lines, corporate memphis style, no textures, high vector quality.",
@@ -155,19 +155,19 @@ const cleanPromptText = (text: string): string => {
   return cleaned.trim();
 };
 
-const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode) => {
+const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode, masterStylePrompt?: string) => {
   const cleanedPrompt = cleanPromptText(prompt);
 
-  // 1. Get Rich Style Description
-  let styleDescription = STYLE_DEFINITIONS[style] || style;
+  // 1. Get Rich Style Description (Prioritize Master Prompt for batch consistency)
+  let styleDescription = masterStylePrompt || STYLE_DEFINITIONS[style] || style;
 
   // 2. Enforce Color Logic
   let colorInstruction = colorMode === ColorMode.BlackAndWhite
     ? "Black and white, high contrast, monochromatic, no color."
     : "Full color, vibrant, professional lighting.";
 
-  // Override for specific styles
-  if (BW_FORCED_STYLES.includes(style)) {
+  // Override for specific styles (Only if using default style description)
+  if (!masterStylePrompt && BW_FORCED_STYLES.includes(style)) {
     colorInstruction = "Strictly Black and White, Monochromatic, Greyscale. NO COLOR.";
   }
 
@@ -197,11 +197,12 @@ export const generateSceneImage = async (
   style: ArtStyle,
   colorMode: ColorMode,
   referenceImage?: string,
-  styleReferenceImage?: string
+  styleReferenceImage?: string,
+  masterStylePrompt?: string
 ): Promise<string> => {
   try {
     const ai = getAiClient();
-    const fullPrompt = buildPrompt(prompt, style, colorMode);
+    const fullPrompt = buildPrompt(prompt, style, colorMode, masterStylePrompt);
 
     const parts: any[] = [];
 

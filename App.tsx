@@ -15,8 +15,8 @@ import { AnimaticPlayer } from './components/AnimaticPlayer';
 import { LoginScreen } from './components/LoginScreen';
 
 // Services
-import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue } from './services/geminiService';
-import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, saveProject } from './services/firebase';
+import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue, STYLE_DEFINITIONS } from './services/geminiService';
+import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, uploadVideoToStorage, saveProject } from './services/firebase';
 import { logout, getGuestId } from './services/auth';
 
 // Types
@@ -253,8 +253,12 @@ function App() {
           // Update Status
           setProcessingStatus(`Rendering & Saving Scene ${index + 1} of ${total}...`);
 
+
+          // 0. Resolve Master Style Prompt (Consistent Styles)
+          const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
+
           // 1. Generate Image
-          const base64Image = await generateSceneImage(scene.prompt, imageSize, aspectRatio, artStyle, colorMode, undefined, styleReference);
+          const base64Image = await generateSceneImage(scene.prompt, imageSize, aspectRatio, artStyle, colorMode, undefined, styleReference, masterStylePrompt);
 
           // 2. Optimistic UI Update
           const localScene = { ...scene, imageUrl: base64Image, isLoading: false };
@@ -537,23 +541,8 @@ function App() {
       const safeIndex = scenes.findIndex(s => s.id === sceneId);
 
       if (user && currentProject) {
-        // Upload Video Logic (if needed) or just save URL if it's remote
-        // Assuming we use uploadVideoToStorage if available
-        // finalVideoUrl = await uploadVideoToStorage(user.uid, projectTitle, safeIndex, videoUrl); // Using new strict uploader
-        // Wait, I need to import it or assume it's there. 
-        // I'll stick to basic assignment for now unless I update imports in App.tsx
-        // Ah, I need to update App.tsx imports to include uploadVideoToStorage.
-        // Effectively, the user asked for strict naming. I should call it.
-        // But I can't add import in this replace block easily without viewing top of file.
-        // I will assume it's imported correctly or add it later?
-        // Since I can't edit imports in this block, I will stick to assigning the URL 
-        // BUT standardizing later.
-        // Actually I can edit lines 1-20 in another block.
-        // For now, I'll pass.
-        // Wait, the Prompt says "WE NEED A SINGLE SOURCE OF TRUTH".
-        // Using the raw Gemini URL breaks that. I should try to upload.
-        // Is uploadVideoToStorage imported? No.
-        // I will add it to the imports in a separate call.
+        // Strict Upload: Ensure we own the asset
+        finalVideoUrl = await uploadVideoToStorage(user.uid, projectTitle, scene.title || `scene_${safeIndex + 1}`, videoUrl);
       }
 
       const updatedScene = { ...scene, videoUrl: finalVideoUrl, isVideoLoading: false };

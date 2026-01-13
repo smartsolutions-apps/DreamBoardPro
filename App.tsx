@@ -504,7 +504,7 @@ function App() {
 
           // Auto-Tagging (Background)
           if (uploadSuccess) {
-            autoTagScene(finalScene.prompt, cloudUrl).catch(console.error);
+            autoTagScene(currentScene.prompt, cloudUrl).catch(console.error);
           }
 
 

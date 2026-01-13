@@ -465,7 +465,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       </div>
 
       {/* TOOLBAR: High Z-Index to prevent blocking */}
-      {!isEditing && !scene.isLoading && !scene.error && (
+      {!isEditing && !scene.isLoading && (
         <div className="relative z-40 flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-b border-gray-100">
           <div className="flex gap-1">
             {/* Main Creation Actions */}

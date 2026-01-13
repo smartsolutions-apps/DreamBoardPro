@@ -261,7 +261,7 @@ function App() {
           setScenes(current => current.map(s => s.id === scene.id ? localScene : s));
 
           // 3. Strict Upload (Await to prevent congestion)
-          // Ensure valid user ID exists before upload
+          // Ensure valid user ID exists before upload (FORCE FRESH ID)
           const authInstance = getAuthInstance();
           const activeUserId = authInstance.currentUser?.uid || getGuestId();
 

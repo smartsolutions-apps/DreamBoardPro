@@ -367,20 +367,27 @@ const getCompactDate = () => {
   return d.toISOString().split('T')[0].replace(/-/g, ''); // 20260113
 };
 
-export const uploadImageToStorage = async (userId: string, projectName: string, sceneTitle: string, imageData: string): Promise<string> => {
-  if (userId === MOCK_USER_ID || !isFirebaseActive) {
-    console.warn("Skipping Firebase Upload (Local Mode/Offline)");
+export const uploadImageToStorage = async (userId: string | undefined | null, projectName: string, sceneTitle: string, imageData: string): Promise<string> => {
+  if (!isFirebaseActive) {
+    console.warn("Skipping Firebase Upload (Offline)");
     return imageData;
   }
+
+  // Handle Guest Uploads
+  const effectiveUserId = userId || 'temp_guest';
+  const isGuest = effectiveUserId === 'temp_guest';
 
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
   const fullDate = getCompactDate();
 
   // Strict Naming: ProjectName_SceneTitle_Date.png
-  // Example: my_cool_movie_scene_1_20260113.png
   const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.png`;
-  const path = `users/${userId}/${safeProjectName}/${filename}`;
+
+  // Use a special folder for guests so we can clean it up later or migrate it
+  const path = isGuest
+    ? `temp_guests/${safeProjectName}/${filename}`
+    : `users/${effectiveUserId}/${safeProjectName}/${filename}`;
 
   try {
     const storageRef = ref(storage, path);
@@ -391,7 +398,7 @@ export const uploadImageToStorage = async (userId: string, projectName: string, 
 
     await uploadString(storageRef, base64ToUpload, 'data_url');
     const url = await getDownloadURL(storageRef);
-    console.log("Image Uploaded:", url);
+    console.log(`Image Uploaded (${isGuest ? 'GUEST' : 'USER'}):`, url);
     return url;
   } catch (error) {
     console.error("Firebase Storage Upload FAILED:", error);

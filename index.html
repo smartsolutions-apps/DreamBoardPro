@@ -1,21 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DreamBoard Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <script>
-      // 1. PREVENT CRASH: Polyfill process.env for browser environment
-      window.process = window.process || { env: {} };
-      // Note: The actual API_KEY is injected by the environment, but this ensures 'process' exists.
 
-      // 2. ERROR TRAP: Display errors on screen instead of White Screen of Death
-      window.onerror = function(message, source, lineno, colno, error) {
-        const root = document.getElementById('root');
-        if (root) {
-            root.innerHTML = `
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DreamBoard Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    // 1. PREVENT CRASH: Polyfill process.env for browser environment
+    window.process = window.process || { env: {} };
+    // Note: The actual API_KEY is injected by the environment, but this ensures 'process' exists.
+
+    // 2. ERROR TRAP: Display errors on screen instead of White Screen of Death
+    window.onerror = function (message, source, lineno, colno, error) {
+      const root = document.getElementById('root');
+      if (root) {
+        root.innerHTML = `
                 <div style="padding: 20px; color: #7f1d1d; background: #fef2f2; font-family: sans-serif; border: 2px solid #ef4444; margin: 20px; border-radius: 8px;">
                     <h2 style="margin-top:0">Something went wrong</h2>
                     <p><strong>Error:</strong> ${message}</p>
@@ -24,53 +25,63 @@
                     <button onclick="localStorage.clear(); window.location.reload()" style="background:#4b5563; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; margin-left:10px;">Reset Cache</button>
                 </div>
             `;
-        }
-      };
+      }
+    };
 
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Nunito', 'sans-serif'],
-            },
-            colors: {
-              brand: {
-                50: '#fff1f2',
-                100: '#ffe4e6',
-                200: '#fecdd3',
-                300: '#fda4af',
-                400: '#fb7185',
-                500: '#f43f5e',
-                600: '#e11d48',
-                700: '#be123c',
-              }
-            }
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Nunito', 'sans-serif'],
           },
+          colors: {
+            brand: {
+              50: '#fff1f2',
+              100: '#ffe4e6',
+              200: '#fecdd3',
+              300: '#fda4af',
+              400: '#fb7185',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+            }
+          }
         },
-      }
-    </script>
-    <style>
-      body { margin: 0; font-family: 'Nunito', sans-serif; background: #f8fafc; }
-      #root { height: 100vh; }
-      
-      /* Custom scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #fb7185; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #e11d48; 
-      }
-    </style>
-    <script type="importmap">
+      },
+    }
+  </script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Nunito', sans-serif;
+      background: #f8fafc;
+    }
+
+    #root {
+      height: 100vh;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #fb7185;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #e11d48;
+    }
+  </style>
+  <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
@@ -89,9 +100,12 @@
   }
 }
 </script>
-  </head>
-  <body class="bg-indigo-50 text-gray-800 antialiased">
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+
+<body class="bg-indigo-50 text-gray-800 antialiased">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
 </html>

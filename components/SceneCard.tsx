@@ -297,7 +297,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             </div>
             <span className="text-sm font-bold text-brand-500 animate-pulse">Rendering Scene {index + 1}...</span>
           </div>
-        ) : scene.error ? (
+        ) : scene.error && !scene.imageUrl ? (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 p-6 text-center bg-red-50/50">
             <AlertCircle size={32} className="mb-2 text-red-400" />
             <span className="text-sm text-red-500 font-medium">{scene.error}</span>
@@ -385,7 +385,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                     <RefreshCw size={14} className="animate-spin" />
                   </div>
                 )}
-                {scene.uploadError && (
+                {scene.uploadError ? (
                   <button
                     onClick={(e) => { e.stopPropagation(); onRetryUpload?.(scene.id); }}
                     title="Upload Failed. Click to Retry."
@@ -394,6 +394,10 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                     <Upload size={14} />
                     <span className="text-[10px] font-bold">Retry Save</span>
                   </button>
+                ) : !scene.isUploading && !scene.isLoading && scene.imageUrl && (
+                  <div title="Saved to Cloud" className="bg-green-500/90 backdrop-blur-md p-1.5 rounded-full text-white shadow-sm">
+                    <Check size={14} />
+                  </div>
                 )}
               </div>
             )}

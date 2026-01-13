@@ -276,7 +276,7 @@ function App() {
           if (activeProjectId) {
             try {
               // Pass explicit index for strict sorting/naming
-              cloudUrl = await uploadImageToStorage(currentUserId, safeTitle, `scene_${index + 1}`, base64Image);
+              cloudUrl = await uploadImageToStorage(activeUserId, safeTitle, `scene_${index + 1}`, base64Image);
 
               // Validate Upload Success
               if (!cloudUrl || !cloudUrl.startsWith('http')) {
@@ -436,13 +436,9 @@ function App() {
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
     const scene = scenes.find(s => s.id === sceneId);
 
-    // GUARD: Check if image exists before editing to prevent crashes
-    if (!scene?.imageUrl) {
-      // alert("Please wait for upload to finish before editing."); // Alert typically bad UX, better to just reset
-      // Actually user requested toast. I'll use console.warn and reset state for now as I don't have a toast component handy.
-      // Wait, user explicitly said: "show a toast: 'Please wait...'... instead of crashing".
-      // I will use alert() as simple toast proxy since I don't have a toast system.
-      alert("Please wait for upload to finish before editing.");
+    // GUARD: Check if image exists and is SAVED before editing to prevent crashes
+    if (!scene?.imageUrl || !scene.imageUrl.startsWith('http')) {
+      alert("Please wait for the image to save to the cloud before editing.");
       setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
       return;
     }
@@ -647,14 +643,14 @@ function App() {
     try {
       // Ensure valid user ID
       const authInstance = getAuthInstance();
-      const currentUserId = authInstance.currentUser?.uid || getGuestId();
+      const activeUserId = authInstance.currentUser?.uid || getGuestId();
 
-      if (!currentUserId) throw new Error("No user ID found for upload");
+      if (!activeUserId) throw new Error("CRITICAL: No user ID found for upload");
 
       const sceneIndex = scenes.findIndex(s => s.id === sceneId);
 
       // 2. Upload
-      const cloudUrl = await uploadImageToStorage(currentUserId, projectTitle, `scene_${sceneIndex + 1}`, scene.imageUrl);
+      const cloudUrl = await uploadImageToStorage(activeUserId, projectTitle, `scene_${sceneIndex + 1}`, scene.imageUrl);
 
       if (!cloudUrl.startsWith('http')) throw new Error("Retry Upload Failed");
 

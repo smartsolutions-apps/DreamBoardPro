@@ -418,20 +418,30 @@ function App() {
             console.error(`Upload failed for Scene ${index + 1}`, e);
           }
 
-          const finalScene = {
-            ...currentScene,
-            imageUrl: cloudUrl
+          // Create Asset Entry
+          const initialAsset: AssetVersion = {
+            id: Date.now().toString(),
+            type: 'illustration',
+            url: cloudUrl,
+            prompt: finalScene.prompt,
+            createdAt: Date.now()
           };
 
-          uploadedScenes.push(finalScene);
+          const finalSceneWithHistory = {
+            ...currentScene,
+            imageUrl: cloudUrl,
+            assetHistory: [initialAsset] // First entry
+          };
+
+          uploadedScenes.push(finalSceneWithHistory);
           savedCount++;
 
           // Update State incrementally 
-          setScenes(current => current.map(s => s.id === finalScene.id ? finalScene : s));
+          setScenes(current => current.map(s => s.id === finalSceneWithHistory.id ? finalSceneWithHistory : s));
 
           // Save Scene Metadata to Firestore (if uploaded)
           if (activeProjectId && uploadSuccess) {
-            await saveSceneToFirestore(activeProjectId, finalScene);
+            await saveSceneToFirestore(activeProjectId, finalSceneWithHistory);
 
             // Incremental Project Save 
             if (currentProject) {
@@ -558,9 +568,24 @@ function App() {
         // Fallback to base64 but warn
       }
 
-      // 4. Update State
+      // 4. Update State & History
       const scene = scenes.find(s => s.id === sceneId);
-      const finalScene = { ...scene!, imageUrl: finalUrl, prompt, isLoading: false };
+
+      const newAsset: AssetVersion = {
+        id: Date.now().toString(),
+        type: 'illustration',
+        url: finalUrl,
+        prompt: prompt,
+        createdAt: Date.now()
+      };
+
+      const finalScene = {
+        ...scene!,
+        imageUrl: finalUrl,
+        prompt,
+        isLoading: false,
+        assetHistory: [...(scene?.assetHistory || []), newAsset]
+      };
 
       const updatedScenes = scenes.map(s => s.id === sceneId ? finalScene : s);
       setScenes(updatedScenes);
@@ -699,7 +724,21 @@ function App() {
         console.error("Video upload failed, keeping original URL", uploadErr);
       }
 
-      const updatedScene = { ...scene, videoUrl: finalVideoUrl, isVideoLoading: false };
+      const newAsset: AssetVersion = {
+        id: Date.now().toString(),
+        type: 'video',
+        url: finalVideoUrl,
+        prompt: scene.prompt,
+        createdAt: Date.now()
+      };
+
+      const updatedScene = {
+        ...scene,
+        videoUrl: finalVideoUrl,
+        isVideoLoading: false,
+        assetHistory: [...(scene.assetHistory || []), newAsset]
+      };
+
       const updatedScenes = scenes.map(s => s.id === sceneId ? updatedScene : s);
       setScenes(updatedScenes);
 
@@ -737,7 +776,21 @@ function App() {
         console.error("Audio upload failed", uploadErr);
       }
 
-      const updatedScene = { ...scene, audioUrl: finalAudioUrl, isAudioLoading: false };
+      const newAsset: AssetVersion = {
+        id: Date.now().toString(),
+        type: 'audio',
+        url: finalAudioUrl,
+        prompt: scene.prompt,
+        createdAt: Date.now()
+      };
+
+      const updatedScene = {
+        ...scene,
+        audioUrl: finalAudioUrl,
+        isAudioLoading: false,
+        assetHistory: [...(scene.assetHistory || []), newAsset]
+      };
+
       const updatedScenes = scenes.map(s => s.id === sceneId ? updatedScene : s);
       setScenes(updatedScenes);
 

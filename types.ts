@@ -12,6 +12,14 @@ export type SceneTransition = 'Cut' | 'Fade In' | 'Fade Out' | 'Dissolve' | 'Wip
 
 export type TextStyle = 'Standard' | 'Outline' | 'Shadow' | 'Neon' | 'Retro' | 'Glitch' | 'Cinema';
 
+export interface AssetVersion {
+  id: string; // timestamp
+  type: 'illustration' | 'video' | 'audio';
+  url: string; // Firebase Storage URL
+  prompt: string; // The exact text used to generate
+  createdAt: number;
+}
+
 export interface StoryScene {
   id: string;
   title?: string;
@@ -32,6 +40,7 @@ export interface StoryScene {
   isAudioLoading?: boolean;
   error?: string;
   versions: SceneVersion[];
+  assetHistory?: AssetVersion[]; // Full chain of custody
   projectId?: string; // Link to parent project
 }
 

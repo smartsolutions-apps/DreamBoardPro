@@ -1430,7 +1430,21 @@ function App() {
                     </button>
 
                     <button
-                      onClick={() => setShowAnimatic(true)}
+                      onClick={async () => {
+                        // 1. Pre-Flight Audio Check
+                        const missingAudio = scenes.filter(s => !s.audioUrl);
+                        if (missingAudio.length > 0) {
+                          if (!confirm(`Generating narration for ${missingAudio.length} scenes first. Continue?`)) return;
+                          setProcessingStatus(`Generating Narration for ${missingAudio.length} scenes...`);
+
+                          // Serial Generation for safety
+                          for (const s of missingAudio) {
+                            await handleGenerateAudio(s.id);
+                          }
+                          setProcessingStatus(null);
+                        }
+                        setShowAnimatic(true);
+                      }}
                       className="flex items-center gap-1 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg shadow-md transition-colors"
                     >
                       <PlayCircle size={16} /> Play Animatic

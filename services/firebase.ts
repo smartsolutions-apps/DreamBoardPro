@@ -381,8 +381,6 @@ export const uploadImageToStorage = async (userId: string | undefined | null, pr
   const safeTitle = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
   const fullDate = getCompactDate();
-  const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
-  const fullDate = getCompactDate();
 
   // Strict Naming: ProjectName_SceneTitle_Date.png
   const filename = `${safeTitle}_${safeSceneTitle}_${fullDate}.png`;

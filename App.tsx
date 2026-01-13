@@ -239,7 +239,7 @@ function App() {
     if (window.confirm("Start a new project? This will clear your current workspace.")) {
       // 1. Clear Cache
       localStorage.removeItem('cached_story');
-      // Note: We deliberately KEEP user_prefs
+      // Note: We deliberately KEEP user_prefs (Standard SaaS Persistence)
 
       // 2. Reset State
       setScript('');

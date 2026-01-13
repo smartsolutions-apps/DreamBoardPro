@@ -1257,14 +1257,29 @@ function App() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={handleNewProject}
+                  onClick={() => {
+                    if (confirm("Reset Cache: This will clear local changes. Are you sure?")) {
+                      localStorage.removeItem('dreamBoard_save');
+                      window.location.reload();
+                    }
+                  }}
                   className="bg-gray-100 text-gray-600 px-4 py-3 rounded-xl font-bold shadow-sm hover:bg-red-50 hover:text-red-600 flex items-center gap-2 transition-transform hover:-translate-y-1"
                   title="Clear Local Storage Cache"
                 >
                   <Trash2 size={18} /> <span className="hidden sm:inline">Reset Cache</span>
                 </button>
                 <button
-                  onClick={handleNewProject}
+                  onClick={() => {
+                    // HARD RESET
+                    setScript('');
+                    setProjectTitle('');
+                    setScenes([]);
+                    setGeneratedImages({});
+                    setCurrentProject(null);
+                    localStorage.removeItem('dreamBoard_save');
+                    setCurrentView('editor');
+                    window.scrollTo(0, 0);
+                  }}
                   className="bg-brand-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-brand-700 flex items-center gap-2 transition-transform hover:-translate-y-1"
                 >
                   <Plus size={20} /> New Project
@@ -1509,11 +1524,35 @@ function App() {
                       onDragStart={onDragStart}
                       onDragOver={onDragOver}
                       onDrop={onDrop}
-                      onDrop={onDrop}
                       onExpand={setLightboxImage}
                       onDelete={handleDeleteScene} // Pass delete handler
                     />
                   ))}
+
+                  {/* --- ADD SCENE BUTTON --- */}
+                  <button
+                    onClick={async () => {
+                      const newId = `scene-${Date.now()}`;
+                      const newScene: StoryScene = {
+                        id: newId,
+                        title: `Scene ${scenes.length + 1}`,
+                        prompt: "New Scene - Click Edit to add details",
+                        imageUrl: "https://placehold.co/600x400?text=New+Scene",
+                        projectId: currentProject?.id
+                      };
+                      const updated = [...scenes, newScene];
+                      setScenes(updated);
+
+                      // Persist
+                      if (currentProject) {
+                        await saveProject({ ...currentProject, sceneCount: updated.length }, updated);
+                      }
+                    }}
+                    className="flex flex-col items-center justify-center gap-4 min-h-[400px] border-4 border-dashed border-gray-200 rounded-2xl hover:border-brand-300 hover:bg-brand-50 transition-all text-gray-400 hover:text-brand-600"
+                  >
+                    <Plus size={48} className="opacity-50" />
+                    <span className="font-bold text-lg">Add New Scene</span>
+                  </button>
                 </div>
               </section>
             )}

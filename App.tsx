@@ -572,6 +572,9 @@ function App() {
 
     } catch (err: any) {
       handleGenerationError(sceneId, err);
+    } finally {
+      // Ensure loading is cleared even if unexpected error
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
     }
   }, [imageSize, aspectRatio, artStyle, colorMode, styleReference, user, projectTitle, currentProject, scenes, characterSheet]);
 
@@ -621,6 +624,8 @@ function App() {
 
     } catch (err: any) {
       handleGenerationError(sceneId, err);
+    } finally {
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
     }
   }, [scenes, imageSize, aspectRatio, artStyle, colorMode, user, projectTitle, currentProject]);
 

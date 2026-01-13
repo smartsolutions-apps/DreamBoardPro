@@ -559,7 +559,14 @@ function App() {
   };
 
   const handleRegenerate = useCallback(async (sceneId: string, prompt: string, referenceImage?: string) => {
-    // 1. Set Loading State
+    // 1. Get Scene & Validate
+    const currentScene = scenes.find(s => s.id === sceneId);
+    if (!currentScene) {
+      console.error("Scene not found for regeneration");
+      return;
+    }
+
+    // 2. Set Loading State
     setScenes(prev => prev.map(s => {
       if (s.id !== sceneId) return s;
       return {
@@ -572,12 +579,21 @@ function App() {
 
     try {
       // PROXY FIX: Ensure we send Base64, not URL
+      // Priority: Specific Scene Reference -> Global Style PROXY (if user wants that) -> undefined
+      // Actually, for regeneration, we usually want to KEEP the scene composition (previous image) or use a new reference.
+      // If referenceImage is passed (from the card's edit input), use it.
       let validReference = referenceImage;
-      if (referenceImage && referenceImage.startsWith('http')) {
-        validReference = await urlToBase64(referenceImage);
+      if (!validReference && currentScene.imageUrl && !currentScene.isPlaceholder) {
+        // Use the current image as reference to maintain composition? 
+        // User might want to change it. Let's stick to explicit reference passed or none.
+        // But for style persistence, we mainly care about `styleReference`.
       }
 
-      // Also check styleReference
+      if (validReference && validReference.startsWith('http')) {
+        validReference = await urlToBase64(validReference);
+      }
+
+      // GLOBAL STYLE REFERENCE (The "Look" of the film)
       let validStyleRef = styleReference;
       if (styleReference && styleReference.startsWith('http')) {
         validStyleRef = await urlToBase64(styleReference);
@@ -587,17 +603,18 @@ function App() {
       const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
 
       // FORCE: Enforce Style and Reference in the prompt itself
-      const finalPrompt = `${masterStylePrompt} . ${scene.description || prompt} . Keep character consistent with reference.`;
+      const styleInstruction = `STYLE: ${artStyle} (Strict). NO realistic photos.`;
+      const finalPrompt = `${styleInstruction} \n\n ${prompt || currentScene.prompt} \n\n Keep character consistent.`;
 
-      // 2. Generate Image
+      // 3. Generate Image
       const base64Image = await generateSceneImage(
         finalPrompt,
         imageSize,
         aspectRatio,
         artStyle,
         colorMode,
-        validReference,
-        validStyleRef,
+        validReference, // Structural Reference
+        validStyleRef,  // Art Style Reference
         masterStylePrompt,
         characterSheet
       );

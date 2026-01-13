@@ -505,6 +505,35 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             >
               <Edit2 size={16} />
             </button>
+
+            {/* History Icon */}
+            {scene.assetHistory && scene.assetHistory.length > 0 && (
+              <button
+                onClick={() => onCompareVersion({
+                  id: scene.assetHistory![scene.assetHistory!.length - 1].id,
+                  imageUrl: scene.assetHistory![scene.assetHistory!.length - 1].url,
+                  prompt: scene.assetHistory![scene.assetHistory!.length - 1].prompt,
+                  timestamp: scene.assetHistory![scene.assetHistory!.length - 1].createdAt
+                })}
+                title="Version History"
+                className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-500 transition-colors"
+              >
+                <Clock size={16} />
+              </button>
+            )}
+
+            {/* Delete Icon */}
+            <button
+              onClick={() => {
+                if (confirm("Delete this scene?")) {
+                  onDelete(scene.id);
+                }
+              }}
+              title="Delete Scene"
+              className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
 
           <div className="flex gap-1 relative">

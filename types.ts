@@ -44,6 +44,8 @@ export interface Project {
   thumbnailUrl?: string;
   sceneCount: number;
   scenes?: { storageUrl: string }[]; // Metadata for dashboard previews
+  script?: string;
+  characterSheet?: string;
 }
 
 export interface UserProfile {

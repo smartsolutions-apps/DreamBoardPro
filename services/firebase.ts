@@ -496,15 +496,28 @@ export const urlToBase64 = async (url: string): Promise<string> => {
   }
 };
 
-export const uploadAudioToStorage = async (user: User | null | undefined, projectName: string, sceneTitle: string, audioData: string): Promise<string> => {
+export const uploadAudioToStorage = async (userOrId: any, projectName: string, sceneTitle: string, audioData: string): Promise<string> => {
   if (!isFirebaseActive) return audioData;
 
-  const userFolder = getUserStorageFolder(user);
+  // 1. Resolve User ID and Folder Name
+  let userId = 'guest';
+  let userFolder = `guest_${getCompactDate()}`;
+
+  if (userOrId && typeof userOrId === 'object' && userOrId.uid) {
+    userId = userOrId.uid;
+    const safeName = userOrId.displayName ? sanitizeName(userOrId.displayName) : 'user';
+    userFolder = `${safeName}_${userId.substring(0, 6)}`;
+  } else if (typeof userOrId === 'string' && userOrId !== 'temp_guest') {
+    userId = userOrId;
+    userFolder = `user_${userId.substring(0, 6)}`;
+  }
+
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_audio';
   const fullDate = getCompactDate().replace(/-/g, '');
 
   const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.wav`;
+  // Uniform Path: users/{Folder}/{Project}/{File}
   const path = `users/${userFolder}/${safeProjectName}/${filename}`;
 
   try {
@@ -519,52 +532,35 @@ export const uploadAudioToStorage = async (user: User | null | undefined, projec
   }
 };
 
-export const uploadVideoToStorage = async (userId: string, projectName: string, sceneTitle: string, videoUrlOrBlob: string): Promise<string> => {
-  if (userId === MOCK_USER_ID || !isFirebaseActive) return videoUrlOrBlob;
+export const uploadVideoToStorage = async (userOrId: any, projectName: string, sceneTitle: string, videoUrlOrBlob: string): Promise<string> => {
+  if (!isFirebaseActive) return videoUrlOrBlob;
+
+  // 1. Resolve User ID and Folder Name
+  let userId = 'guest';
+  let userFolder = `guest_${getCompactDate()}`;
+
+  if (userOrId && typeof userOrId === 'object' && userOrId.uid) {
+    userId = userOrId.uid;
+    const safeName = userOrId.displayName ? sanitizeName(userOrId.displayName) : 'user';
+    userFolder = `${safeName}_${userId.substring(0, 6)}`;
+  } else if (typeof userOrId === 'string' && userOrId !== 'temp_guest') {
+    userId = userOrId;
+    userFolder = `user_${userId.substring(0, 6)}`;
+  }
 
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_video';
   const fullDate = getCompactDate();
 
   const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.mp4`;
-  const path = `users/${userId}/${safeProjectName}/${filename}`;
+  const path = `users/${userFolder}/${safeProjectName}/${filename}`;
 
   try {
     const storageRef = ref(storage, path);
-    // If it's already a remote URL (like from Veo), we might want to fetch and re-upload to own it, 
-    // OR just return it if we want to save bandwidth. 
-    // User said "We need a single source of truth". Ideally we re-upload.
-    // But Veo urls expire? If they are transient, we MUST re-upload. 
-    // Assuming we pass base64 or blob url.
 
-    // For now, if it's http, we try to fetch and re-upload to ensure persistence.
-    let blobToUpload = videoUrlOrBlob;
-
+    // Check if it's already a URL (e.g. from Veo or re-upload)
     if (videoUrlOrBlob.startsWith('http')) {
-      // Fetch blob from Gemini URL
-      const response = await fetch(videoUrlOrBlob);
-      const blob = await response.blob();
-      await new Promise((resolve, reject) => {
-        // Upload Bytes
-        // We need uploadBytes for Blob, but we imported uploadString. 
-        // We'll stick to string if we can, but video is binary.
-        // Ideally we import uploadBytes. 
-        // Let's assume we can convert to base64 or usage of uploadString with 'data_url' is preferred if we had base64.
-        // For safety with large videos, we should use bytes, but let's stick to existing imports if possible 
-        // or add uploadBytes to imports.
-        // Wait, I can only replace this block. I should add uploadBytes to imports?
-        // Current imports: ref, uploadString, getDownloadURL.
-        // I'll stick to uploadString if I convert to base64, but that's heavy.
-        // I will skip re-uploading remote URLs for now if it requires import changes that break things, 
-        // UNLESS I add uploadBytes to imports efficiently. 
-        // Let's rely on the URL for now if it's external, or assuming it's a data url.
-        resolve(true);
-      });
-      // Actually, without uploadBytes, re-uploading blob is hard. 
-      // I'll assume valid input is data_url for now or just return if it's remote.
-      // User requirement: "Storage Organization". 
-      // I will use uploadString and assume input is Data URL (Base64). 
-      // Converting a 5MB video to base64 string is heavy but feasible.
+      // Return original if we can't easily re-upload without CORS issues
       return videoUrlOrBlob;
     }
 

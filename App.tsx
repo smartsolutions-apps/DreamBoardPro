@@ -436,7 +436,9 @@ function App() {
                 ...currentProject,
                 id: activeProjectId,
                 title: safeTitle,
-                sceneCount: savedCount
+                sceneCount: savedCount,
+                script, // Persist Script
+                characterSheet // Persist Characters
               }, uploadedScenes);
             }
           }
@@ -472,7 +474,9 @@ function App() {
           ...currentProject,
           id: activeProjectId,
           title: safeTitle,
-          sceneCount: finalScenes.length
+          sceneCount: finalScenes.length,
+          script,
+          characterSheet
         }, finalScenes);
         setLastSaved(new Date());
       }

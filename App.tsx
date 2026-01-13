@@ -348,7 +348,6 @@ function App() {
       // Update UI with placeholders
       setScenes(initialScenes);
 
-      const finalScenes: StoryScene[] = [];
       const total = initialScenes.length;
 
       // --- PHASE 1: BATCH GENERATION (Consistency & Speed) ---

@@ -23,6 +23,7 @@ interface SceneCardProps {
   onDrop: (e: React.DragEvent, index: number) => void;
   onExpand: (imageUrl: string) => void;
   onRetryUpload?: (id: string) => void;
+  onDelete: (id: string) => void; // New Prop
 }
 
 const FILTERS: { id: SceneFilter; label: string; class: string }[] = [

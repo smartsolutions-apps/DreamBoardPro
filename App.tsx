@@ -241,6 +241,21 @@ function App() {
     }
   };
 
+  // --- SCENE DELETION ---
+  const handleDeleteScene = async (sceneId: string) => {
+    // 1. Optimistic Update
+    const updatedScenes = scenes.filter(s => s.id !== sceneId);
+    setScenes(updatedScenes);
+
+    // 2. Persist Project Update (Important for scene count sync)
+    if (currentProject) {
+      await saveProject({
+        ...currentProject,
+        sceneCount: updatedScenes.length
+      }, updatedScenes);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     setUser(null);
@@ -1489,7 +1504,9 @@ function App() {
                       onDragStart={onDragStart}
                       onDragOver={onDragOver}
                       onDrop={onDrop}
+                      onDrop={onDrop}
                       onExpand={setLightboxImage}
+                      onDelete={handleDeleteScene} // Pass delete handler
                     />
                   ))}
                 </div>

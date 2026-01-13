@@ -39,6 +39,7 @@ function App() {
 
   // --- Editor State ---
   const [script, setScript] = useState('');
+  const [characterSheet, setCharacterSheet] = useState(''); // NEW: For consistency
 
   // Settings State
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.Size1K);
@@ -244,6 +245,7 @@ function App() {
       // 2. Reset State
       setScript('');
       setScenes([]);
+      setCharacterSheet('');
       setProjectTitle('');
       setCurrentProject(null);
       setLastSaved(null);
@@ -314,7 +316,12 @@ function App() {
     setSelectedSceneIds(new Set());
 
     try {
-      const prompts = await analyzeScript(script, sceneCount);
+      // FIX: Extract Characters for Consistency
+      const analysis = await analyzeScript(script, sceneCount);
+      const prompts = analysis.scenes;
+      const extractedCharacters = analysis.characters;
+      setCharacterSheet(extractedCharacters);
+      console.log("Character Sheet Extracted:", extractedCharacters);
 
       const initialScenes: StoryScene[] = prompts.map((prompt, index) => ({
         id: `scene-${Date.now()}-${index}`,
@@ -339,10 +346,21 @@ function App() {
 
 
           // 0. Resolve Master Style Prompt (Consistent Styles)
+          // INJECT: Character Context & Style Bible
           const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
 
-          // 1. Generate Image
-          const base64Image = await generateSceneImage(scene.prompt, imageSize, aspectRatio, artStyle, colorMode, undefined, styleReference, masterStylePrompt);
+          // 1. Generate Image (PASS CONSISTENCY DATA)
+          const base64Image = await generateSceneImage(
+            scene.prompt,
+            imageSize,
+            aspectRatio,
+            artStyle,
+            colorMode,
+            undefined,
+            styleReference,
+            masterStylePrompt, // Style Bible
+            extractedCharacters // Character Bible
+          );
 
           // 2. Optimistic UI Update
           const localScene = { ...scene, imageUrl: base64Image, isLoading: false };
@@ -479,8 +497,21 @@ function App() {
         validStyleRef = await urlToBase64(styleReference);
       }
 
+      // Resolve consistency data
+      const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
+
       // 2. Generate Image
-      const base64Image = await generateSceneImage(prompt, imageSize, aspectRatio, artStyle, colorMode, validReference, validStyleRef);
+      const base64Image = await generateSceneImage(
+        prompt,
+        imageSize,
+        aspectRatio,
+        artStyle,
+        colorMode,
+        validReference,
+        validStyleRef,
+        masterStylePrompt,
+        characterSheet
+      );
 
       // Calculate index for strict naming
       const sceneIndex = scenes.findIndex(s => s.id === sceneId);
@@ -513,7 +544,7 @@ function App() {
     } catch (err: any) {
       handleGenerationError(sceneId, err);
     }
-  }, [imageSize, aspectRatio, artStyle, colorMode, styleReference, user, projectTitle, currentProject, scenes]);
+  }, [imageSize, aspectRatio, artStyle, colorMode, styleReference, user, projectTitle, currentProject, scenes, characterSheet]);
 
   const handleRefine = useCallback(async (sceneId: string, instruction: string) => {
     // 1. Set Loading

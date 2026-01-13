@@ -101,22 +101,39 @@ function writeString(view: DataView, offset: number, string: string) {
   }
 }
 
-export const analyzeScript = async (script: string, sceneCount: number = 5): Promise<string[]> => {
+// Updated Interface for Analysis Result
+export interface AnalysisResult {
+  scenes: string[];
+  characters: string;
+}
+
+export const analyzeScript = async (script: string, sceneCount: number = 5): Promise<AnalysisResult> => {
   try {
     const ai = getAiClient();
     const response = await ai.models.generateContent({
       model: TEXT_MODEL,
-      contents: `Read the following story script and break it down into EXACTLY ${sceneCount} distinct, visually descriptive scenes suitable for a storyboard. 
-      Return ONLY a JSON array of strings, where each string is the visual description.
+      contents: `Read the story script. 
+      1. Extract a "Character Bible" (names, ages, specific visual details like hair, clothes).
+      2. Break the script into EXACTLY ${sceneCount} distinct, visually descriptive scenes.
+
+      Return ONLY valid JSON with this structure:
+      {
+        "characters": "A summary string describing main characters...",
+        "scenes": ["Scene 1 description...", "Scene 2 description..."]
+      }
       
       Script:
       "${script}"`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.STRING
+          type: Type.OBJECT,
+          properties: {
+            characters: { type: Type.STRING },
+            scenes: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
           }
         }
       }
@@ -125,7 +142,7 @@ export const analyzeScript = async (script: string, sceneCount: number = 5): Pro
     const jsonText = response.text;
     if (!jsonText) throw new Error("No response from AI");
 
-    return JSON.parse(jsonText) as string[];
+    return JSON.parse(jsonText) as AnalysisResult;
   } catch (error) {
     console.error("Error analyzing script:", error);
     throw new Error("Failed to analyze the story. Please try again!");
@@ -155,7 +172,7 @@ const cleanPromptText = (text: string): string => {
   return cleaned.trim();
 };
 
-const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode, masterStylePrompt?: string) => {
+const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode, masterStylePrompt?: string, characterSheet?: string) => {
   const cleanedPrompt = cleanPromptText(prompt);
 
   // 1. Get Rich Style Description (Prioritize Master Prompt for batch consistency)
@@ -171,11 +188,12 @@ const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode, mast
     colorInstruction = "Strictly Black and White, Monochromatic, Greyscale. NO COLOR.";
   }
 
-  // 3. Construct Prompt: [STYLE] + [COLOR] + [SUBJECT]
+  // 3. Construct Prompt: [STYLE] + [COLOR] + [CHARACTERS] + [SCENE]
   return `
     Create a professional storyboard image.
     VISUAL STYLE: ${styleDescription}
     COLOR PALETTE: ${colorInstruction}
+    ${characterSheet ? `CHARACTERS (MAINTAIN CONSISTENCY): ${characterSheet}` : ''}
     SCENE ACTION: ${cleanedPrompt}
     
     Ensure high quality, detailed composition. Do not render text, titles, or UI elements.
@@ -198,11 +216,12 @@ export const generateSceneImage = async (
   colorMode: ColorMode,
   referenceImage?: string,
   styleReferenceImage?: string,
-  masterStylePrompt?: string
+  masterStylePrompt?: string,
+  characterSheet?: string
 ): Promise<string> => {
   try {
     const ai = getAiClient();
-    const fullPrompt = buildPrompt(prompt, style, colorMode, masterStylePrompt);
+    const fullPrompt = buildPrompt(prompt, style, colorMode, masterStylePrompt, characterSheet);
 
     const parts: any[] = [];
 

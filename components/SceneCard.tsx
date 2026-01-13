@@ -22,6 +22,7 @@ interface SceneCardProps {
   onDragOver: (e: React.DragEvent, index: number) => void;
   onDrop: (e: React.DragEvent, index: number) => void;
   onExpand: (imageUrl: string) => void;
+  onRetryUpload?: (id: string) => void;
 }
 
 const FILTERS: { id: SceneFilter; label: string; class: string }[] = [
@@ -64,7 +65,8 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   onDragStart,
   onDragOver,
   onDrop,
-  onExpand
+  onExpand,
+  onRetryUpload
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -76,7 +78,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  
+
   const [editPrompt, setEditPrompt] = useState(scene.prompt);
   const [selectedShot, setSelectedShot] = useState<ShotType>(scene.shotType || ShotType.None);
   const [refImagePreview, setRefImagePreview] = useState<string | undefined>(scene.referenceImage);
@@ -84,10 +86,10 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [mode, setMode] = useState<'edit' | 'refine'>('edit');
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [hoveredVersion, setHoveredVersion] = useState<string | null>(null);
-  
+
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState(scene.title || `Scene ${index + 1}`);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getAspectRatioClass = (ratio: AspectRatio) => {
@@ -103,13 +105,13 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const handleSaveEdit = () => {
     let finalPrompt = editPrompt;
     if (selectedShot !== ShotType.None && !editPrompt.toLowerCase().includes(selectedShot.toLowerCase())) {
-        finalPrompt = `${selectedShot} of ${editPrompt}`;
+      finalPrompt = `${selectedShot} of ${editPrompt}`;
     }
 
-    onUpdateScene(scene.id, { 
-      prompt: editPrompt, 
-      shotType: selectedShot, 
-      referenceImage: refImagePreview 
+    onUpdateScene(scene.id, {
+      prompt: editPrompt,
+      shotType: selectedShot,
+      referenceImage: refImagePreview
     });
 
     onRegenerate(scene.id, finalPrompt, refImagePreview);
@@ -158,7 +160,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
 
       const filterClass = FILTERS.find(f => f.id === scene.filter)?.class || '';
       if (filterClass) {
-         ctx.filter = getComputedStyle(document.documentElement).getPropertyValue(`--tw-${filterClass}`) || filterClass; 
+        ctx.filter = getComputedStyle(document.documentElement).getPropertyValue(`--tw-${filterClass}`) || filterClass;
       }
 
       if (format === 'jpeg') {
@@ -189,25 +191,25 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const handleCopyImage = async () => {
     if (!scene.imageUrl) return;
     try {
-        // Try Text/URL Copy First (for browsers)
-        await navigator.clipboard.writeText(scene.imageUrl);
+      // Try Text/URL Copy First (for browsers)
+      await navigator.clipboard.writeText(scene.imageUrl);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    } catch (err) {
+      console.error("Text copy failed, trying blob", err);
+      // Fallback to Blob Copy (for image editors)
+      try {
+        const response = await fetch(scene.imageUrl);
+        const blob = await response.blob();
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob })
+        ]);
         setCopyFeedback(true);
         setTimeout(() => setCopyFeedback(false), 2000);
-    } catch (err) {
-        console.error("Text copy failed, trying blob", err);
-        // Fallback to Blob Copy (for image editors)
-        try {
-            const response = await fetch(scene.imageUrl);
-            const blob = await response.blob();
-            await navigator.clipboard.write([
-                new ClipboardItem({ [blob.type]: blob })
-            ]);
-            setCopyFeedback(true);
-            setTimeout(() => setCopyFeedback(false), 2000);
-        } catch (blobErr) {
-             console.error("Blob copy failed", blobErr);
-             alert("Could not copy to clipboard.");
-        }
+      } catch (blobErr) {
+        console.error("Blob copy failed", blobErr);
+        alert("Could not copy to clipboard.");
+      }
     }
   };
 
@@ -221,7 +223,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       reader.readAsDataURL(file);
     }
   };
-  
+
   const handlePreviewTransition = () => {
     setIsPreviewingTransition(true);
     setTimeout(() => setIsPreviewingTransition(false), 2000);
@@ -229,26 +231,26 @@ export const SceneCard: React.FC<SceneCardProps> = ({
 
   const toggleAudio = () => {
     if (audioRef.current) {
-       if (isPlayingAudio) {
-         audioRef.current.pause();
-         setIsPlayingAudio(false);
-       } else {
-         audioRef.current.play();
-         setIsPlayingAudio(true);
-       }
+      if (isPlayingAudio) {
+        audioRef.current.pause();
+        setIsPlayingAudio(false);
+      } else {
+        audioRef.current.play();
+        setIsPlayingAudio(true);
+      }
     } else if (scene.audioUrl) {
-       const audio = new Audio(scene.audioUrl);
-       audio.onended = () => setIsPlayingAudio(false);
-       audio.play();
-       audioRef.current = audio;
-       setIsPlayingAudio(true);
+      const audio = new Audio(scene.audioUrl);
+      audio.onended = () => setIsPlayingAudio(false);
+      audio.play();
+      audioRef.current = audio;
+      setIsPlayingAudio(true);
     } else {
-       onGenerateAudio(scene.id);
+      onGenerateAudio(scene.id);
     }
   };
 
   return (
-    <div 
+    <div
       draggable={!isEditing}
       onDragStart={(e) => onDragStart(e, index)}
       onDragOver={(e) => onDragOver(e, index)}
@@ -262,12 +264,12 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       {/* Checkbox - Elevated z-index */}
       {!isEditing && (
         <div className="absolute top-3 left-3 z-30">
-           <input 
-             type="checkbox"
-             checked={isSelected}
-             onChange={() => onToggleSelect(scene.id)}
-             className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 cursor-pointer shadow-sm"
-           />
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(scene.id)}
+            className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 cursor-pointer shadow-sm"
+          />
         </div>
       )}
 
@@ -279,15 +281,15 @@ export const SceneCard: React.FC<SceneCardProps> = ({
       )}
 
       {/* Image Area */}
-      <div 
+      <div
         className={`relative bg-gray-50 ${getAspectRatioClass(aspectRatio)} cursor-pointer group/image`}
         onClick={() => {
-            if (!isEditing && scene.imageUrl && !scene.videoUrl) {
-                onExpand(hoveredVersion || scene.imageUrl);
-            }
+          if (!isEditing && scene.imageUrl && !scene.videoUrl) {
+            onExpand(hoveredVersion || scene.imageUrl);
+          }
         }}
       >
-        {scene.isLoading ? (
+        {scene.isLoading && !scene.imageUrl ? (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
             <div className="relative w-16 h-16 mb-4">
               <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
@@ -299,7 +301,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 p-6 text-center bg-red-50/50">
             <AlertCircle size={32} className="mb-2 text-red-400" />
             <span className="text-sm text-red-500 font-medium">{scene.error}</span>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); onRegenerate(scene.id, scene.prompt); }}
               className="mt-4 px-5 py-2 bg-white border border-red-200 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors shadow-sm"
             >
@@ -310,127 +312,148 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           <>
             {/* Main Image or Video */}
             {scene.videoUrl && !videoError ? (
-                <video 
-                    src={scene.videoUrl} 
-                    autoPlay 
-                    loop 
-                    muted 
-                    className="w-full h-full object-cover relative z-10"
-                    onError={() => setVideoError(true)}
-                />
+              <video
+                src={scene.videoUrl}
+                autoPlay
+                loop
+                muted
+                className="w-full h-full object-cover relative z-10"
+                onError={() => setVideoError(true)}
+              />
             ) : (scene.imageUrl || hoveredVersion) ? (
               <>
-                  <img 
-                    src={hoveredVersion || scene.imageUrl} 
-                    alt={scene.prompt} 
-                    className={`
+                <img
+                  src={hoveredVersion || scene.imageUrl}
+                  alt={scene.prompt}
+                  className={`
                       w-full h-full object-cover transition-all duration-700 relative z-10
                       ${!hoveredVersion && FILTERS.find(f => f.id === scene.filter)?.class}
                       ${isPreviewingTransition ? 'opacity-50 scale-110' : ''} 
                     `}
-                  />
-                  {/* Hover Overlay - z-20 to be above image but below controls if needed, but here it IS the control trigger */}
-                  <div className="absolute inset-0 z-20 bg-black/0 group-hover/image:bg-black/10 transition-colors flex items-center justify-center pointer-events-none">
-                      <Maximize2 className="text-white opacity-0 group-hover/image:opacity-100 drop-shadow-md transition-opacity" size={32} />
+                />
+                {/* Hover Overlay - z-20 to be above image but below controls if needed, but here it IS the control trigger */}
+                <div className="absolute inset-0 z-20 bg-black/0 group-hover/image:bg-black/10 transition-colors flex items-center justify-center pointer-events-none">
+                  <Maximize2 className="text-white opacity-0 group-hover/image:opacity-100 drop-shadow-md transition-opacity" size={32} />
+                </div>
+
+                {/* Fallback Error for Video */}
+                {scene.videoUrl && videoError && (
+                  <div className="absolute bottom-4 left-4 right-4 bg-red-100 border border-red-200 p-2 rounded text-xs text-red-700 z-30 flex items-center gap-2">
+                    <AlertCircle size={12} /> Upload Failed - Check Console
                   </div>
-                  
-                  {/* Fallback Error for Video */}
-                  {scene.videoUrl && videoError && (
-                      <div className="absolute bottom-4 left-4 right-4 bg-red-100 border border-red-200 p-2 rounded text-xs text-red-700 z-30 flex items-center gap-2">
-                          <AlertCircle size={12} /> Upload Failed - Check Console
-                      </div>
-                  )}
+                )}
               </>
             ) : (
-               <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-100 relative z-10">
-                  <ImageIcon size={48} />
-               </div>
+              <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-100 relative z-10">
+                <ImageIcon size={48} />
+              </div>
             )}
-            
+
             {/* Loading Overlay for Video/Audio */}
             {(scene.isVideoLoading || scene.isAudioLoading) && (
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-30 backdrop-blur-sm">
-                  <div className="bg-white/95 px-5 py-3 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-xl animate-bounce-in">
-                     {scene.isVideoLoading ? <Video size={18} className="text-brand-500 animate-pulse"/> : <Music size={18} className="text-brand-500 animate-pulse"/>}
-                     <span className="bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                        {scene.isVideoLoading ? 'Generating Video...' : 'Creating Audio...'}
-                     </span>
-                  </div>
+                <div className="bg-white/95 px-5 py-3 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-xl animate-bounce-in">
+                  {scene.isVideoLoading ? <Video size={18} className="text-brand-500 animate-pulse" /> : <Music size={18} className="text-brand-500 animate-pulse" />}
+                  <span className="bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                    {scene.isVideoLoading ? 'Generating Video...' : 'Creating Audio...'}
+                  </span>
+                </div>
               </div>
             )}
 
             {/* Filter/Style Pills */}
             <div className="absolute top-3 right-3 flex flex-col gap-1 items-end pointer-events-none z-30">
               {scene.filter && scene.filter !== 'none' && !scene.isLoading && (
-                 <div className="bg-black/50 backdrop-blur-md text-white px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider">
-                   {FILTERS.find(f => f.id === scene.filter)?.label}
-                 </div>
+                <div className="bg-black/50 backdrop-blur-md text-white px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider">
+                  {FILTERS.find(f => f.id === scene.filter)?.label}
+                </div>
               )}
             </div>
 
             {/* Comparison Label */}
             {hoveredVersion && (
-               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white px-4 py-2 rounded-full font-bold text-sm backdrop-blur-md pointer-events-none z-30">
-                  Viewing Old Version
-               </div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white px-4 py-2 rounded-full font-bold text-sm backdrop-blur-md pointer-events-none z-30">
+                Viewing Old Version
+              </div>
             )}
-            
+
+            {/* Upload Status Icons */}
+            {!isEditing && (
+              <div className="absolute top-3 left-10 z-30 flex items-center gap-2">
+                {scene.isUploading && (
+                  <div title="Uploading to Safe Cloud..." className="bg-black/50 backdrop-blur-md p-1.5 rounded-full text-white animate-pulse">
+                    <RefreshCw size={14} className="animate-spin" />
+                  </div>
+                )}
+                {scene.uploadError && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRetryUpload?.(scene.id); }}
+                    title="Upload Failed. Click to Retry."
+                    className="bg-red-500/90 backdrop-blur-md p-1.5 rounded-full text-white hover:bg-red-600 border border-white/20 shadow-md transition-transform hover:scale-110 flex items-center gap-1 px-2"
+                  >
+                    <Upload size={14} />
+                    <span className="text-[10px] font-bold">Retry Save</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Version History Toggle */}
-             {!isEditing && scene.versions && scene.versions.length > 0 && (
+            {!isEditing && scene.versions && scene.versions.length > 0 && (
               <div className="absolute bottom-2 right-2 z-30" onClick={(e) => e.stopPropagation()}>
-                 <button 
-                   onClick={() => setShowHistory(!showHistory)}
-                   className="bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-lg backdrop-blur-sm transition-all"
-                   title="Version History"
-                 >
-                   <Clock size={16} />
-                 </button>
-                 
-                 {/* History Dropdown */}
-                 {showHistory && (
-                   <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in-up">
-                     <div className="p-2 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-500 uppercase">
-                       History (Hover to preview)
-                     </div>
-                     <div className="max-h-40 overflow-y-auto">
-                        {scene.versions.slice().reverse().map((v, i) => (
-                          <div 
-                            key={v.id}
-                            className="p-2 hover:bg-indigo-50 cursor-pointer flex items-center justify-between group/item"
-                            onMouseEnter={() => setHoveredVersion(v.imageUrl)}
-                            onMouseLeave={() => setHoveredVersion(null)}
-                          >
-                             <div className="flex flex-col">
-                               <span className="text-xs font-medium text-gray-700">Ver {scene.versions.length - i}</span>
-                               <span className="text-[10px] text-gray-400">{new Date(v.timestamp).toLocaleTimeString()}</span>
-                             </div>
-                             <div className="flex gap-1">
-                               <button 
-                                 onClick={() => {
-                                    onCompareVersion(v);
-                                    setShowHistory(false);
-                                 }}
-                                 className="opacity-0 group-hover/item:opacity-100 text-purple-600 hover:bg-purple-100 p-1 rounded"
-                                 title="Compare side-by-side"
-                               >
-                                  <SplitSquareHorizontal size={14} />
-                               </button>
-                               <button 
-                                 onClick={() => {
-                                   onRestoreVersion(scene.id, v);
-                                   setShowHistory(false);
-                                 }}
-                                 className="opacity-0 group-hover/item:opacity-100 text-brand-600 hover:bg-brand-50 p-1 rounded"
-                                 title="Restore this version"
-                               >
-                                  <RotateCcw size={14} />
-                               </button>
-                             </div>
+                <button
+                  onClick={() => setShowHistory(!showHistory)}
+                  className="bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-lg backdrop-blur-sm transition-all"
+                  title="Version History"
+                >
+                  <Clock size={16} />
+                </button>
+
+                {/* History Dropdown */}
+                {showHistory && (
+                  <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in-up">
+                    <div className="p-2 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-500 uppercase">
+                      History (Hover to preview)
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      {scene.versions.slice().reverse().map((v, i) => (
+                        <div
+                          key={v.id}
+                          className="p-2 hover:bg-indigo-50 cursor-pointer flex items-center justify-between group/item"
+                          onMouseEnter={() => setHoveredVersion(v.imageUrl)}
+                          onMouseLeave={() => setHoveredVersion(null)}
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium text-gray-700">Ver {scene.versions.length - i}</span>
+                            <span className="text-[10px] text-gray-400">{new Date(v.timestamp).toLocaleTimeString()}</span>
                           </div>
-                        ))}
-                     </div>
-                   </div>
-                 )}
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => {
+                                onCompareVersion(v);
+                                setShowHistory(false);
+                              }}
+                              className="opacity-0 group-hover/item:opacity-100 text-purple-600 hover:bg-purple-100 p-1 rounded"
+                              title="Compare side-by-side"
+                            >
+                              <SplitSquareHorizontal size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                onRestoreVersion(scene.id, v);
+                                setShowHistory(false);
+                              }}
+                              className="opacity-0 group-hover/item:opacity-100 text-brand-600 hover:bg-brand-50 p-1 rounded"
+                              title="Restore this version"
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -439,283 +462,283 @@ export const SceneCard: React.FC<SceneCardProps> = ({
 
       {/* TOOLBAR: High Z-Index to prevent blocking */}
       {!isEditing && !scene.isLoading && !scene.error && (
-         <div className="relative z-40 flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-b border-gray-100">
-            <div className="flex gap-1">
-                 {/* Main Creation Actions */}
-                 <button 
-                  onClick={() => { setVideoError(false); onGenerateVideo(scene.id); }}
-                  title={scene.videoUrl ? "Regenerate Video" : "Animate Scene (Veo)"}
-                  className={`p-1.5 rounded-lg transition-colors ${scene.videoUrl && !videoError ? 'bg-pink-100 text-pink-600' : 'hover:bg-gray-200 text-gray-600'}`}
-                >
-                   <Video size={16} />
-                 </button>
+        <div className="relative z-40 flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-b border-gray-100">
+          <div className="flex gap-1">
+            {/* Main Creation Actions */}
+            <button
+              onClick={() => { setVideoError(false); onGenerateVideo(scene.id); }}
+              title={scene.videoUrl ? "Regenerate Video" : "Animate Scene (Veo)"}
+              className={`p-1.5 rounded-lg transition-colors ${scene.videoUrl && !videoError ? 'bg-pink-100 text-pink-600' : 'hover:bg-gray-200 text-gray-600'}`}
+            >
+              <Video size={16} />
+            </button>
 
-                 <button 
-                  onClick={toggleAudio}
-                  title={scene.audioUrl ? (isPlayingAudio ? "Pause Narration" : "Play Narration") : "Generate Narration"}
-                  className={`p-1.5 rounded-lg transition-colors ${isPlayingAudio ? 'bg-green-100 text-green-600 animate-pulse' : (scene.audioUrl ? 'text-green-600' : 'hover:bg-gray-200 text-gray-600')}`}
-                >
-                   {scene.audioUrl && isPlayingAudio ? <Volume2 size={16} /> : <Music size={16} />}
-                </button>
-                
-                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+            <button
+              onClick={toggleAudio}
+              title={scene.audioUrl ? (isPlayingAudio ? "Pause Narration" : "Play Narration") : "Generate Narration"}
+              className={`p-1.5 rounded-lg transition-colors ${isPlayingAudio ? 'bg-green-100 text-green-600 animate-pulse' : (scene.audioUrl ? 'text-green-600' : 'hover:bg-gray-200 text-gray-600')}`}
+            >
+              {scene.audioUrl && isPlayingAudio ? <Volume2 size={16} /> : <Music size={16} />}
+            </button>
 
-                 {/* Editing Actions */}
-                 <button 
-                  onClick={() => onUpscale(scene.id)}
-                  title="Upscale"
-                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
-                >
-                   <Zap size={16} />
-                 </button>
+            <div className="w-px h-6 bg-gray-300 mx-1"></div>
 
-                 <button 
-                  onClick={() => setIsEditing(true)}
-                  title="Edit Scene"
-                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
-                >
-                  <Edit2 size={16} />
-                </button>
+            {/* Editing Actions */}
+            <button
+              onClick={() => onUpscale(scene.id)}
+              title="Upscale"
+              className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+            >
+              <Zap size={16} />
+            </button>
+
+            <button
+              onClick={() => setIsEditing(true)}
+              title="Edit Scene"
+              className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+            >
+              <Edit2 size={16} />
+            </button>
+          </div>
+
+          <div className="flex gap-1 relative">
+            {/* Secondary Actions in a "More" or simple list */}
+
+            {/* Filters Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+                title="Filters"
+              >
+                <Sliders size={16} />
+              </button>
+              {showFilters && (
+                <div className="absolute bottom-full right-0 mb-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-up">
+                  {FILTERS.map(filter => (
+                    <button
+                      key={filter.id}
+                      onClick={() => {
+                        onUpdateScene(scene.id, { filter: filter.id });
+                        setShowFilters(false);
+                      }}
+                      className={`px-3 py-2 text-left text-xs font-semibold hover:bg-gray-50 transition-colors flex justify-between items-center ${scene.filter === filter.id ? 'text-brand-600 bg-brand-50' : 'text-gray-600'}`}
+                    >
+                      {filter.label}
+                      {scene.filter === filter.id && <Check size={12} />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            
-            <div className="flex gap-1 relative">
-                {/* Secondary Actions in a "More" or simple list */}
-                
-                {/* Filters Dropdown */}
-                <div className="relative">
-                   <button 
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
-                    title="Filters"
-                  >
-                     <Sliders size={16} />
-                   </button>
-                   {showFilters && (
-                     <div className="absolute bottom-full right-0 mb-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-up">
-                       {FILTERS.map(filter => (
-                         <button 
-                           key={filter.id}
-                           onClick={() => {
-                             onUpdateScene(scene.id, { filter: filter.id });
-                             setShowFilters(false);
-                           }} 
-                           className={`px-3 py-2 text-left text-xs font-semibold hover:bg-gray-50 transition-colors flex justify-between items-center ${scene.filter === filter.id ? 'text-brand-600 bg-brand-50' : 'text-gray-600'}`}
-                         >
-                           {filter.label}
-                           {scene.filter === filter.id && <Check size={12} />}
-                         </button>
-                       ))}
-                     </div>
-                   )}
-                 </div>
 
-                 <button 
-                  onClick={handleCopyImage}
-                  title="Copy Link/Image"
-                  className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors relative"
-                >
-                   {copyFeedback ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-                 </button>
+            <button
+              onClick={handleCopyImage}
+              title="Copy Link/Image"
+              className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors relative"
+            >
+              {copyFeedback ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+            </button>
 
-                 <div className="relative">
-                   <button 
-                    onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                    className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
-                    title="Download"
-                  >
-                     <Download size={16} />
-                   </button>
-                   {showDownloadMenu && (
-                     <div className="absolute bottom-full right-0 mb-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-up">
-                       <button onClick={() => downloadImage('png')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">PNG (Default)</button>
-                       <button onClick={() => downloadImage('jpeg')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">JPEG (Small)</button>
-                     </div>
-                   )}
-                 </div>
+            <div className="relative">
+              <button
+                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition-colors"
+                title="Download"
+              >
+                <Download size={16} />
+              </button>
+              {showDownloadMenu && (
+                <div className="absolute bottom-full right-0 mb-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-30 flex flex-col overflow-hidden animate-fade-in-up">
+                  <button onClick={() => downloadImage('png')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">PNG (Default)</button>
+                  <button onClick={() => downloadImage('jpeg')} className="px-3 py-2 text-left text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors">JPEG (Small)</button>
+                </div>
+              )}
             </div>
-         </div>
+          </div>
+        </div>
       )}
-      
+
       {/* Edit Panel */}
       {isEditing && (
-         <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-4 relative z-40">
-             {/* ... (Existing Edit Panel Logic) ... */}
-             <div className="flex bg-gray-200 p-1 rounded-lg">
-                <button 
-                  onClick={() => setMode('edit')}
-                  className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${mode === 'edit' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
-                >
-                  Compose
-                </button>
-                <button 
-                  onClick={() => setMode('refine')}
-                  disabled={!scene.imageUrl}
-                  className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all flex items-center justify-center gap-1 ${mode === 'refine' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 disabled:opacity-50'}`}
-                >
-                   <Sparkles size={12} />
-                   Magic Edit
-                </button>
-             </div>
+        <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-4 relative z-40">
+          {/* ... (Existing Edit Panel Logic) ... */}
+          <div className="flex bg-gray-200 p-1 rounded-lg">
+            <button
+              onClick={() => setMode('edit')}
+              className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all ${mode === 'edit' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
+            >
+              Compose
+            </button>
+            <button
+              onClick={() => setMode('refine')}
+              disabled={!scene.imageUrl}
+              className={`flex-1 text-xs font-bold py-1.5 rounded-md transition-all flex items-center justify-center gap-1 ${mode === 'refine' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 disabled:opacity-50'}`}
+            >
+              <Sparkles size={12} />
+              Magic Edit
+            </button>
+          </div>
 
-             {mode === 'edit' ? (
-               showSketchPad ? (
-                 <div className="h-64">
-                   <SketchPad 
-                    initialImage={refImagePreview}
-                    onSave={(img) => {
-                      setRefImagePreview(img);
-                      setShowSketchPad(false);
-                    }}
-                    onCancel={() => setShowSketchPad(false)}
-                   />
-                 </div>
-               ) : (
-                 <>
-                   <div className="flex gap-2">
-                     <select 
-                       value={selectedShot} 
-                       onChange={(e) => setSelectedShot(e.target.value as ShotType)}
-                       className="bg-white border border-gray-200 text-xs rounded-lg px-2 py-2 outline-none focus:border-brand-300 w-1/2"
-                     >
-                       {Object.values(ShotType).map(t => <option key={t} value={t}>{t}</option>)}
-                     </select>
-                     
-                     <div className="flex w-1/2 gap-1">
-                        <button 
-                          onClick={() => setShowSketchPad(true)}
-                          className={`flex-1 border border-dashed rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-colors ${refImagePreview ? 'border-brand-300 bg-brand-50 text-brand-600' : 'border-gray-300 text-gray-500 hover:bg-white'}`}
-                        >
-                          <Pencil size={14} />
-                          {refImagePreview ? 'Edit Sketch' : 'Draw'}
-                        </button>
-                        
-                        <div className="relative flex-1">
-                          <input 
-                            type="file" 
-                            ref={fileInputRef}
-                            onChange={handleImageUpload}
-                            accept="image/*"
-                            className="hidden"
-                          />
-                          <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-full h-full border border-dashed rounded-lg flex items-center justify-center gap-1 text-xs font-medium text-gray-500 hover:bg-white border-gray-300"
-                          >
-                             <Upload size={14} /> Upload
-                          </button>
-                        </div>
-                     </div>
-                   </div>
+          {mode === 'edit' ? (
+            showSketchPad ? (
+              <div className="h-64">
+                <SketchPad
+                  initialImage={refImagePreview}
+                  onSave={(img) => {
+                    setRefImagePreview(img);
+                    setShowSketchPad(false);
+                  }}
+                  onCancel={() => setShowSketchPad(false)}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedShot}
+                    onChange={(e) => setSelectedShot(e.target.value as ShotType)}
+                    className="bg-white border border-gray-200 text-xs rounded-lg px-2 py-2 outline-none focus:border-brand-300 w-1/2"
+                  >
+                    {Object.values(ShotType).map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
 
-                   {refImagePreview && !showSketchPad && (
-                      <div className="relative h-16 w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                         <img src={refImagePreview} alt="Ref" className="w-full h-full object-contain opacity-50" />
-                         <div className="absolute inset-0 flex items-center justify-center gap-2">
-                            <span className="text-xs font-bold text-gray-500 bg-white/80 px-2 py-1 rounded">Ref Image Active</span>
-                            <button onClick={() => setRefImagePreview(undefined)} className="bg-red-500 text-white p-1 rounded-full"><X size={12} /></button>
-                         </div>
-                      </div>
-                   )}
-                   
-                   <textarea
-                    value={editPrompt}
-                    onChange={(e) => setEditPrompt(e.target.value)}
-                    className="w-full text-sm p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none resize-none bg-white text-gray-700"
-                    rows={3}
-                    placeholder="Describe the scene..."
-                  />
-                 </>
-               )
-             ) : (
-                <div className="flex flex-col gap-2">
-                   <p className="text-xs text-gray-500">Describe changes to the current image (e.g., "Change the time to sunset" or "Make the character smile")</p>
-                   <textarea
-                    value={refineInstruction}
-                    onChange={(e) => setRefineInstruction(e.target.value)}
-                    className="w-full text-sm p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none resize-none bg-white text-gray-700"
-                    rows={3}
-                    placeholder="What should change?"
-                  />
+                  <div className="flex w-1/2 gap-1">
+                    <button
+                      onClick={() => setShowSketchPad(true)}
+                      className={`flex-1 border border-dashed rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-colors ${refImagePreview ? 'border-brand-300 bg-brand-50 text-brand-600' : 'border-gray-300 text-gray-500 hover:bg-white'}`}
+                    >
+                      <Pencil size={14} />
+                      {refImagePreview ? 'Edit Sketch' : 'Draw'}
+                    </button>
+
+                    <div className="relative flex-1">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full h-full border border-dashed rounded-lg flex items-center justify-center gap-1 text-xs font-medium text-gray-500 hover:bg-white border-gray-300"
+                      >
+                        <Upload size={14} /> Upload
+                      </button>
+                    </div>
+                  </div>
                 </div>
-             )}
 
-             {!showSketchPad && (
-               <div className="flex gap-2 justify-end">
-                  <button onClick={handleCancel} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg"><X size={18} /></button>
-                  {mode === 'edit' ? (
-                     <button onClick={handleSaveEdit} className="flex-1 bg-brand-600 text-white rounded-lg py-2 text-sm font-bold shadow-md hover:bg-brand-700">Generate New</button>
-                  ) : (
-                     <button onClick={handleRefine} className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-bold shadow-md hover:bg-indigo-700">Refine Image</button>
-                  )}
-               </div>
-             )}
-         </div>
+                {refImagePreview && !showSketchPad && (
+                  <div className="relative h-16 w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                    <img src={refImagePreview} alt="Ref" className="w-full h-full object-contain opacity-50" />
+                    <div className="absolute inset-0 flex items-center justify-center gap-2">
+                      <span className="text-xs font-bold text-gray-500 bg-white/80 px-2 py-1 rounded">Ref Image Active</span>
+                      <button onClick={() => setRefImagePreview(undefined)} className="bg-red-500 text-white p-1 rounded-full"><X size={12} /></button>
+                    </div>
+                  </div>
+                )}
+
+                <textarea
+                  value={editPrompt}
+                  onChange={(e) => setEditPrompt(e.target.value)}
+                  className="w-full text-sm p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none resize-none bg-white text-gray-700"
+                  rows={3}
+                  placeholder="Describe the scene..."
+                />
+              </>
+            )
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-gray-500">Describe changes to the current image (e.g., "Change the time to sunset" or "Make the character smile")</p>
+              <textarea
+                value={refineInstruction}
+                onChange={(e) => setRefineInstruction(e.target.value)}
+                className="w-full text-sm p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-100 focus:border-brand-400 outline-none resize-none bg-white text-gray-700"
+                rows={3}
+                placeholder="What should change?"
+              />
+            </div>
+          )}
+
+          {!showSketchPad && (
+            <div className="flex gap-2 justify-end">
+              <button onClick={handleCancel} className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg"><X size={18} /></button>
+              {mode === 'edit' ? (
+                <button onClick={handleSaveEdit} className="flex-1 bg-brand-600 text-white rounded-lg py-2 text-sm font-bold shadow-md hover:bg-brand-700">Generate New</button>
+              ) : (
+                <button onClick={handleRefine} className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-bold shadow-md hover:bg-indigo-700">Refine Image</button>
+              )}
+            </div>
+          )}
+        </div>
       )}
-      
+
       {/* Footer Info & Transitions */}
       {!isEditing && (
         <div className="p-4 flex-1 flex flex-col bg-white rounded-b-3xl gap-2 relative z-40">
-           <div className="flex items-center justify-between">
-             {isEditingTitle ? (
-               <input 
-                 value={titleInput}
-                 onChange={(e) => setTitleInput(e.target.value)}
-                 onBlur={handleTitleSave}
-                 onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
-                 autoFocus
-                 className={`text-xs uppercase tracking-wider bg-transparent border-b border-brand-300 outline-none w-full ${TEXT_STYLES.find(t => t.id === scene.textStyle)?.class || 'font-bold text-gray-800'}`}
-               />
-             ) : (
-                <span 
-                  onClick={() => setIsEditingTitle(true)}
-                  className={`text-xs uppercase tracking-wider cursor-pointer hover:text-brand-500 flex items-center gap-1 group/title transition-colors ${TEXT_STYLES.find(t => t.id === scene.textStyle)?.class || 'font-extrabold text-gray-400'}`}
-                >
-                  {scene.title || `Scene ${index + 1}`}
-                  <Edit2 size={10} className="opacity-0 group-hover/title:opacity-100 transition-opacity text-gray-400" />
-                </span>
-             )}
+          <div className="flex items-center justify-between">
+            {isEditingTitle ? (
+              <input
+                value={titleInput}
+                onChange={(e) => setTitleInput(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
+                autoFocus
+                className={`text-xs uppercase tracking-wider bg-transparent border-b border-brand-300 outline-none w-full ${TEXT_STYLES.find(t => t.id === scene.textStyle)?.class || 'font-bold text-gray-800'}`}
+              />
+            ) : (
+              <span
+                onClick={() => setIsEditingTitle(true)}
+                className={`text-xs uppercase tracking-wider cursor-pointer hover:text-brand-500 flex items-center gap-1 group/title transition-colors ${TEXT_STYLES.find(t => t.id === scene.textStyle)?.class || 'font-extrabold text-gray-400'}`}
+              >
+                {scene.title || `Scene ${index + 1}`}
+                <Edit2 size={10} className="opacity-0 group-hover/title:opacity-100 transition-opacity text-gray-400" />
+              </span>
+            )}
 
             {scene.shotType && scene.shotType !== ShotType.None && (
-               <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold border border-gray-200">
-                  {scene.shotType}
-               </span>
+              <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold border border-gray-200">
+                {scene.shotType}
+              </span>
             )}
           </div>
-          
-          <p 
+
+          <p
             className="text-gray-700 text-sm leading-relaxed line-clamp-3 hover:line-clamp-none transition-all cursor-pointer"
             onClick={() => setIsEditing(true)}
           >
             {scene.prompt}
           </p>
-          
+
           {/* Tags */}
           {scene.tags && scene.tags.length > 0 && (
-             <div className="flex flex-wrap gap-1 mt-1">
-               {scene.tags.map(tag => (
-                 <span key={tag} className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded border border-blue-100">
-                   #{tag}
-                 </span>
-               ))}
-             </div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {scene.tags.map(tag => (
+                <span key={tag} className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded border border-blue-100">
+                  #{tag}
+                </span>
+              ))}
+            </div>
           )}
 
           <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-             <LinkIcon size={12} className="text-gray-400" />
-             <div className="flex items-center gap-1 flex-1">
-               <select 
-                 value={scene.transition || 'Cut'}
-                 onChange={(e) => onUpdateScene(scene.id, { transition: e.target.value as SceneTransition })}
-                 className="text-[10px] bg-transparent text-gray-500 font-semibold uppercase tracking-wider outline-none cursor-pointer hover:text-brand-600 w-full"
-               >
-                 {TRANSITIONS.map(t => <option key={t} value={t}>{t}</option>)}
-               </select>
-               {scene.transition && scene.transition !== 'Cut' && (
-                 <button onClick={handlePreviewTransition} title="Preview Transition" className="text-gray-400 hover:text-brand-500">
-                   <Play size={12} />
-                 </button>
-               )}
-             </div>
+            <LinkIcon size={12} className="text-gray-400" />
+            <div className="flex items-center gap-1 flex-1">
+              <select
+                value={scene.transition || 'Cut'}
+                onChange={(e) => onUpdateScene(scene.id, { transition: e.target.value as SceneTransition })}
+                className="text-[10px] bg-transparent text-gray-500 font-semibold uppercase tracking-wider outline-none cursor-pointer hover:text-brand-600 w-full"
+              >
+                {TRANSITIONS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              {scene.transition && scene.transition !== 'Cut' && (
+                <button onClick={handlePreviewTransition} title="Preview Transition" className="text-gray-400 hover:text-brand-500">
+                  <Play size={12} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

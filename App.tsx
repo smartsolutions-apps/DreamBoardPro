@@ -17,7 +17,7 @@ import { LoginScreen } from './components/LoginScreen';
 // Services
 import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue } from './services/geminiService';
 import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, saveProject } from './services/firebase';
-import { logout } from './services/auth';
+import { logout, getGuestId } from './services/auth';
 
 // Types
 import { ImageSize, AspectRatio, StoryScene, ColorMode, ArtStyle, SceneVersion, SceneTemplate, Project } from './types';
@@ -261,35 +261,53 @@ function App() {
           setScenes(current => current.map(s => s.id === scene.id ? localScene : s));
 
           // 3. Strict Upload (Await to prevent congestion)
+          // Ensure valid user ID exists before upload
+          const currentUserId = user ? user.uid : getGuestId();
+
+          // Mark as uploading but keep image visible
+          setScenes(current => current.map(s => s.id === scene.id ? { ...localScene, isUploading: true, uploadError: false } : s));
+
           let cloudUrl = base64Image;
+          let uploadSuccess = false;
+
           if (activeProjectId) {
             try {
               // Pass explicit index for strict sorting/naming
-              cloudUrl = await uploadImageToStorage(user.uid, safeTitle, `scene_${index + 1}`, base64Image);
+              cloudUrl = await uploadImageToStorage(currentUserId, safeTitle, `scene_${index + 1}`, base64Image);
 
               // Validate Upload Success
               if (!cloudUrl || !cloudUrl.startsWith('http')) {
                 throw new Error("Storage returned invalid URL (Upload Failed)");
               }
+              uploadSuccess = true;
             } catch (uploadErr) {
               console.error(`Storage Upload Failed for Scene ${index + 1}:`, uploadErr);
-              throw new Error("Image generated but failed to save to cloud. Please Retry.");
+              // Do NOT throw here. We want to show the image even if upload fails.
+              // Just mark as upload error.
             }
           }
 
-          const finalScene = { ...localScene, imageUrl: cloudUrl };
-          finalScenes.push(finalScene); // Add to completed list
+          const finalScene = {
+            ...localScene,
+            imageUrl: cloudUrl, // Might still be base64 if upload failed
+            isUploading: false,
+            uploadError: !uploadSuccess && !!activeProjectId // Only error if we tried to upload
+          };
+
+          finalScenes.push(finalScene); // Add to completed list based on latest state
 
           // 4. Update State with final URL
           setScenes(current => current.map(s => s.id === scene.id ? finalScene : s));
 
           // 5. Generate Tags (Background - non-blocking but safe)
-          autoTagScene(scene.prompt, cloudUrl).then(tags => {
-            handleUpdateScene(scene.id, { tags });
-          });
+          if (uploadSuccess) {
+            autoTagScene(scene.prompt, cloudUrl).then(tags => {
+              handleUpdateScene(scene.id, { tags });
+            });
+          }
 
           // 6. Save Scene Metadata
-          if (activeProjectId) {
+          if (activeProjectId && uploadSuccess) {
             await saveSceneToFirestore(activeProjectId, finalScene);
 
             // 7. Auto-Save Project Progress (Stability Fix)
@@ -303,7 +321,7 @@ function App() {
             }
           }
 
-          if (index === 0 && activeProjectId) {
+          if (index === 0 && activeProjectId && uploadSuccess) {
             await updateProjectThumbnail(activeProjectId, cloudUrl);
           }
 
@@ -603,6 +621,38 @@ function App() {
   const handleDeleteTemplate = (id: string) => {
     if (window.confirm("Delete this custom template?")) {
       setCustomTemplates(prev => prev.filter(t => t.id !== id));
+    }
+  };
+
+  const handleRetryUpload = async (sceneId: string) => {
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene || !scene.imageUrl) return;
+
+    // 1. Set uploading state
+    setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isUploading: true, uploadError: false } : s));
+
+    try {
+      // Ensure valid user ID
+      const currentUserId = user ? user.uid : getGuestId();
+      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+
+      // 2. Upload
+      const cloudUrl = await uploadImageToStorage(currentUserId, projectTitle, `scene_${sceneIndex + 1}`, scene.imageUrl);
+
+      if (!cloudUrl.startsWith('http')) throw new Error("Retry Upload Failed");
+
+      // 3. Update State & Persist
+      const finalScene = { ...scene, imageUrl: cloudUrl, isUploading: false, uploadError: false };
+      setScenes(prev => prev.map(s => s.id === sceneId ? finalScene : s));
+
+      if (currentProject) {
+        await saveSceneToFirestore(currentProject.id, finalScene);
+        await saveProject({ ...currentProject }, scenes.map(s => s.id === sceneId ? finalScene : s));
+      }
+
+    } catch (e) {
+      console.error("Retry failed", e);
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isUploading: false, uploadError: true } : s));
     }
   };
 
@@ -1190,6 +1240,7 @@ function App() {
                       onUpdateScene={handleUpdateScene}
                       onRestoreVersion={handleRestoreVersion}
                       onSaveTemplate={handleSaveTemplate}
+                      onRetryUpload={handleRetryUpload}
                       onCompareVersion={(v) => setCompareState({ sceneId: scene.id, version: v })}
                       onGenerateVideo={handleGenerateVideo}
                       onGenerateAudio={handleGenerateAudio}

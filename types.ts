@@ -26,6 +26,8 @@ export interface StoryScene {
   textStyle?: TextStyle;
   tags?: string[];
   isLoading: boolean;
+  isUploading?: boolean;
+  uploadError?: boolean;
   isVideoLoading?: boolean;
   isAudioLoading?: boolean;
   error?: string;

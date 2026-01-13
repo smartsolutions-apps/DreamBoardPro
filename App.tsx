@@ -1538,7 +1538,10 @@ function App() {
                         title: `Scene ${scenes.length + 1}`,
                         prompt: "New Scene - Click Edit to add details",
                         imageUrl: "https://placehold.co/600x400?text=New+Scene",
-                        projectId: currentProject?.id
+                        projectId: currentProject?.id,
+                        assetHistory: [], // Fix: Initialize array
+                        versions: [],      // Fix: Initialize array
+                        isPlaceholder: true
                       };
                       const updated = [...scenes, newScene];
                       setScenes(updated);

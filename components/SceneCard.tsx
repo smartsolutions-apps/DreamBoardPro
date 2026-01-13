@@ -750,7 +750,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           {/* Tags */}
           {scene.tags && scene.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
-              {scene.tags.map(tag => (
+              {scene.tags?.map(tag => (
                 <span key={tag} className="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded border border-blue-100">
                   #{tag}
                 </span>

@@ -338,18 +338,15 @@ function App() {
       const finalScenes: StoryScene[] = [];
       const total = initialScenes.length;
 
-      // --- SERIAL PROCESSING LOOP (Fixes Network Congestion) ---
-      for (const [index, scene] of initialScenes.entries()) {
+      // --- PHASE 1: BATCH GENERATION (Consistency & Speed) ---
+      setProcessingStatus(`Generating ${total} scenes in parallel (Consistency Mode)...`);
+
+      // Resolve Master Style Prompt (Consistent Styles)
+      const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
+
+      // Launch all generation requests in parallel
+      const generationPromises = initialScenes.map(async (scene) => {
         try {
-          // Update Status
-          setProcessingStatus(`Rendering & Saving Scene ${index + 1} of ${total}...`);
-
-
-          // 0. Resolve Master Style Prompt (Consistent Styles)
-          // INJECT: Character Context & Style Bible
-          const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
-
-          // 1. Generate Image (PASS CONSISTENCY DATA)
           const base64Image = await generateSceneImage(
             scene.prompt,
             imageSize,
@@ -361,82 +358,95 @@ function App() {
             masterStylePrompt, // Style Bible
             extractedCharacters // Character Bible
           );
+          return { ...scene, imageUrl: base64Image, isLoading: false };
+        } catch (err: any) {
+          console.error(`Generation failed for scene ${scene.id}`, err);
+          return { ...scene, isLoading: false, error: err.message || "Generation failed." };
+        }
+      });
 
-          // 2. Optimistic UI Update
-          const localScene = { ...scene, imageUrl: base64Image, isLoading: false };
-          setScenes(current => current.map(s => s.id === scene.id ? localScene : s));
+      const generatedScenes = await Promise.all(generationPromises);
 
-          // 3. Upload (Guest Safe)
-          // Note: ensureAuthenticated not needed for guest uploads anymore 
+      // IMMEDIATE UI UPDATE: Show all images
+      setScenes(generatedScenes);
 
-          // Mark as uploading but keep image visible
-          setScenes(current => current.map(s => s.id === scene.id ? { ...localScene, isUploading: true, uploadError: false } : s));
+      // --- PHASE 2: SERIAL UPLOAD (Network Safety) ---
+      setProcessingStatus("Saving to cloud...");
 
-          let cloudUrl = base64Image;
+      const uploadedScenes: StoryScene[] = [];
+      let savedCount = 0;
+
+      for (const [index, scene] of generatedScenes.entries()) {
+        const currentScene = scene;
+
+        // Skip failed generations
+        if (!currentScene.imageUrl || currentScene.error) {
+          uploadedScenes.push(currentScene);
+          continue;
+        }
+
+        try {
+          setProcessingStatus(`Saving Scene ${index + 1} of ${total} to cloud...`);
+
+          let cloudUrl = currentScene.imageUrl;
           let uploadSuccess = false;
 
           try {
-            // Pass explicit index for strict sorting/naming
-            // FIX: Passing full USR object for readable paths
-            cloudUrl = await uploadImageToStorage(user, safeTitle, `scene_${index + 1}`, base64Image);
+            // Calculate index for strict naming
+            const safeIndex = index;
 
-            // Validate Upload Success
-            // if (!cloudUrl || !cloudUrl.startsWith('http')) {
-            //   throw new Error("Storage returned invalid URL (Upload Failed)");
-            // }
+            // Upload to Firebase
+            cloudUrl = await uploadImageToStorage(user, projectTitle, safeIndex, currentScene.imageUrl);
             uploadSuccess = true;
-          } catch (uploadErr) {
-            console.error(`Storage Upload Failed for Scene ${index + 1}:`, uploadErr);
-            // Do NOT throw here. We want to show the image even if upload fails.
-            // Just mark as upload error.
+          } catch (e) {
+            console.error(`Upload failed for Scene ${index + 1}`, e);
           }
-
 
           const finalScene = {
-            ...localScene,
-            imageUrl: cloudUrl, // Might still be base64 if upload failed
-            isUploading: false,
-            uploadError: !uploadSuccess && !!activeProjectId // Only error if we tried to upload
+            ...currentScene,
+            imageUrl: cloudUrl
           };
 
-          finalScenes.push(finalScene); // Add to completed list based on latest state
+          uploadedScenes.push(finalScene);
+          savedCount++;
 
-          // 4. Update State with final URL
-          setScenes(current => current.map(s => s.id === scene.id ? finalScene : s));
+          // Update State incrementally 
+          setScenes(current => current.map(s => s.id === finalScene.id ? finalScene : s));
 
-          // 5. Generate Tags (Background - non-blocking but safe)
-          if (uploadSuccess) {
-            autoTagScene(scene.prompt, cloudUrl).then(tags => {
-              handleUpdateScene(scene.id, { tags });
-            });
-          }
-
-          // 6. Save Scene Metadata
+          // Save Scene Metadata to Firestore (if uploaded)
           if (activeProjectId && uploadSuccess) {
             await saveSceneToFirestore(activeProjectId, finalScene);
 
-            // 7. Auto-Save Project Progress (Stability Fix)
+            // Incremental Project Save 
             if (currentProject) {
               await saveProject({
                 ...currentProject,
                 id: activeProjectId,
                 title: safeTitle,
-                sceneCount: finalScenes.length
-              }, finalScenes);
+                sceneCount: savedCount
+              }, uploadedScenes);
             }
           }
+
+          // Auto-Tagging (Background)
+          if (uploadSuccess) {
+            autoTagScene(finalScene.prompt, cloudUrl).catch(console.error);
+          }
+
 
           if (index === 0 && activeProjectId && uploadSuccess) {
             await updateProjectThumbnail(activeProjectId, cloudUrl);
           }
 
         } catch (err: any) {
-          console.error(`Scene ${index} failed:`, err);
-          const errorScene = { ...scene, isLoading: false, error: err.message || "Generation failed." };
-          setScenes(current => current.map(s => s.id === scene.id ? errorScene : s));
-          finalScenes.push(errorScene); // Ensure order assumes success or fail
+          console.error(`Save failed for Scene ${index}`, err);
+          uploadedScenes.push(currentScene);
         }
       }
+
+      // Final Polish & Sync
+      const finalScenes = uploadedScenes.length > 0 ? uploadedScenes : generatedScenes;
+      setScenes(finalScenes);
 
       // Final Consistency Update
       setScenes(finalScenes);

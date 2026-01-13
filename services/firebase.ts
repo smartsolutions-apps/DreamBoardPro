@@ -357,8 +357,14 @@ export const getProjectScenes = async (projectId: string): Promise<StoryScene[]>
 
 // --- STORAGE ---
 
+// --- STORAGE HELPERS ---
 const sanitizeName = (name: string) => {
   return name.replace(/[^a-z0-9]/gi, '_').toLowerCase().replace(/^_+|_+$/g, '');
+};
+
+const getCompactDate = () => {
+  const d = new Date();
+  return d.toISOString().split('T')[0].replace(/-/g, ''); // 20260113
 };
 
 export const uploadImageToStorage = async (userId: string, projectName: string, sceneTitle: string, imageData: string): Promise<string> => {
@@ -369,10 +375,11 @@ export const uploadImageToStorage = async (userId: string, projectName: string, 
 
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
-  // Strict naming: project/scene_1_image.png 
-  // We keep timestamp to avoid browser caching issues on regenerate, but keep it clean
-  const timestamp = Date.now();
-  const filename = `${safeSceneTitle}_${timestamp}.png`;
+  const fullDate = getCompactDate();
+
+  // Strict Naming: ProjectName_SceneTitle_Date.png
+  // Example: my_cool_movie_scene_1_20260113.png
+  const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.png`;
   const path = `users/${userId}/${safeProjectName}/${filename}`;
 
   try {
@@ -466,10 +473,9 @@ export const uploadAudioToStorage = async (userId: string, projectName: string, 
 
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_audio';
-  const timestamp = Date.now();
+  const fullDate = getCompactDate();
 
-  // Format: users/{userId}/{project}/audio_{scene}_{timestamp}.wav
-  const filename = `audio_${safeSceneTitle}_${timestamp}.wav`;
+  const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.wav`;
   const path = `users/${userId}/${safeProjectName}/${filename}`;
 
   try {
@@ -489,8 +495,9 @@ export const uploadVideoToStorage = async (userId: string, projectName: string, 
 
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_video';
-  const timestamp = Date.now();
-  const filename = `video_${safeSceneTitle}_${timestamp}.mp4`;
+  const fullDate = getCompactDate();
+
+  const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.mp4`;
   const path = `users/${userId}/${safeProjectName}/${filename}`;
 
   try {

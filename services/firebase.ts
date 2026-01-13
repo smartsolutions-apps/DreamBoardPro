@@ -475,15 +475,16 @@ export const urlToBase64 = async (url: string): Promise<string> => {
   }
 };
 
-export const uploadAudioToStorage = async (userId: string, projectName: string, sceneTitle: string, audioData: string): Promise<string> => {
-  if (userId === MOCK_USER_ID || !isFirebaseActive) return audioData;
+export const uploadAudioToStorage = async (user: User | null | undefined, projectName: string, sceneTitle: string, audioData: string): Promise<string> => {
+  if (!isFirebaseActive) return audioData;
 
+  const userFolder = getUserStorageFolder(user);
   const safeProjectName = sanitizeName(projectName) || 'untitled_project';
   const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_audio';
-  const fullDate = getCompactDate();
+  const fullDate = getCompactDate().replace(/-/g, '');
 
   const filename = `${safeProjectName}_${safeSceneTitle}_${fullDate}.wav`;
-  const path = `users/${userId}/${safeProjectName}/${filename}`;
+  const path = `users/${userFolder}/${safeProjectName}/${filename}`;
 
   try {
     const storageRef = ref(storage, path);

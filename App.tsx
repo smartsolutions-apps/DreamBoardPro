@@ -297,9 +297,7 @@ function App() {
           setScenes(current => current.map(s => s.id === scene.id ? localScene : s));
 
           // 3. Upload (Guest Safe)
-          const activeUserId = user ? user.uid : undefined;
           // Note: ensureAuthenticated not needed for guest uploads anymore 
-
 
           // Mark as uploading but keep image visible
           setScenes(current => current.map(s => s.id === scene.id ? { ...localScene, isUploading: true, uploadError: false } : s));
@@ -307,162 +305,162 @@ function App() {
           let cloudUrl = base64Image;
           let uploadSuccess = false;
 
-          if (activeProjectId) {
-            try {
-              // Pass explicit index for strict sorting/naming
-              cloudUrl = await uploadImageToStorage(activeUserId, safeTitle, `scene_${index + 1}`, base64Image);
+          try {
+            // Pass explicit index for strict sorting/naming
+            // FIX: Passing full USR object for readable paths
+            cloudUrl = await uploadImageToStorage(user, safeTitle, `scene_${index + 1}`, base64Image);
 
-              // Validate Upload Success
-              if (!cloudUrl || !cloudUrl.startsWith('http')) {
-                throw new Error("Storage returned invalid URL (Upload Failed)");
-              }
-              uploadSuccess = true;
-            } catch (uploadErr) {
-              console.error(`Storage Upload Failed for Scene ${index + 1}:`, uploadErr);
-              // Do NOT throw here. We want to show the image even if upload fails.
-              // Just mark as upload error.
-            }
+            // Validate Upload Success
+            // if (!cloudUrl || !cloudUrl.startsWith('http')) {
+            //   throw new Error("Storage returned invalid URL (Upload Failed)");
+            // }
+            uploadSuccess = true;
+          } catch (uploadErr) {
+            console.error(`Storage Upload Failed for Scene ${index + 1}:`, uploadErr);
+            // Do NOT throw here. We want to show the image even if upload fails.
+            // Just mark as upload error.
           }
+        }
 
           const finalScene = {
-            ...localScene,
-            imageUrl: cloudUrl, // Might still be base64 if upload failed
-            isUploading: false,
-            uploadError: !uploadSuccess && !!activeProjectId // Only error if we tried to upload
-          };
+          ...localScene,
+          imageUrl: cloudUrl, // Might still be base64 if upload failed
+          isUploading: false,
+          uploadError: !uploadSuccess && !!activeProjectId // Only error if we tried to upload
+        };
 
-          finalScenes.push(finalScene); // Add to completed list based on latest state
+        finalScenes.push(finalScene); // Add to completed list based on latest state
 
-          // 4. Update State with final URL
-          setScenes(current => current.map(s => s.id === scene.id ? finalScene : s));
+        // 4. Update State with final URL
+        setScenes(current => current.map(s => s.id === scene.id ? finalScene : s));
 
-          // 5. Generate Tags (Background - non-blocking but safe)
-          if (uploadSuccess) {
-            autoTagScene(scene.prompt, cloudUrl).then(tags => {
-              handleUpdateScene(scene.id, { tags });
-            });
-          }
-
-          // 6. Save Scene Metadata
-          if (activeProjectId && uploadSuccess) {
-            await saveSceneToFirestore(activeProjectId, finalScene);
-
-            // 7. Auto-Save Project Progress (Stability Fix)
-            if (currentProject) {
-              await saveProject({
-                ...currentProject,
-                id: activeProjectId,
-                title: safeTitle,
-                sceneCount: finalScenes.length
-              }, finalScenes);
-            }
-          }
-
-          if (index === 0 && activeProjectId && uploadSuccess) {
-            await updateProjectThumbnail(activeProjectId, cloudUrl);
-          }
-
-        } catch (err: any) {
-          console.error(`Scene ${index} failed:`, err);
-          const errorScene = { ...scene, isLoading: false, error: err.message || "Generation failed." };
-          setScenes(current => current.map(s => s.id === scene.id ? errorScene : s));
-          finalScenes.push(errorScene); // Ensure order assumes success or fail
+        // 5. Generate Tags (Background - non-blocking but safe)
+        if (uploadSuccess) {
+          autoTagScene(scene.prompt, cloudUrl).then(tags => {
+            handleUpdateScene(scene.id, { tags });
+          });
         }
+
+        // 6. Save Scene Metadata
+        if (activeProjectId && uploadSuccess) {
+          await saveSceneToFirestore(activeProjectId, finalScene);
+
+          // 7. Auto-Save Project Progress (Stability Fix)
+          if (currentProject) {
+            await saveProject({
+              ...currentProject,
+              id: activeProjectId,
+              title: safeTitle,
+              sceneCount: finalScenes.length
+            }, finalScenes);
+          }
+        }
+
+        if (index === 0 && activeProjectId && uploadSuccess) {
+          await updateProjectThumbnail(activeProjectId, cloudUrl);
+        }
+
+      } catch (err: any) {
+        console.error(`Scene ${index} failed:`, err);
+        const errorScene = { ...scene, isLoading: false, error: err.message || "Generation failed." };
+        setScenes(current => current.map(s => s.id === scene.id ? errorScene : s));
+        finalScenes.push(errorScene); // Ensure order assumes success or fail
       }
+    }
 
       // Final Consistency Update
       setScenes(finalScenes);
-      setIsAnalyzing(false);
-      setProcessingStatus(null);
+    setIsAnalyzing(false);
+    setProcessingStatus(null);
 
-      // CRITICAL: Force Save Project immediately after ALL are done
-      if (activeProjectId && currentProject) {
-        await saveProject({
-          ...currentProject,
-          id: activeProjectId,
-          title: safeTitle,
-          sceneCount: finalScenes.length
-        }, finalScenes);
-        setLastSaved(new Date());
-      }
-
-    } catch (err: any) {
-      handleGenerationError('global', err);
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleGenerationError = (id: string, err: any) => {
-    const errString = err.toString();
-    console.error(err);
-    if (id === 'global') {
-      setError(err.message || "Something went wrong.");
-    } else {
-      setScenes(prev => prev.map(s =>
-        s.id === id ? { ...s, error: "Generation failed. Try retrying.", isLoading: false } : s
-      ));
-    }
-  };
-
-  const handleRegenerate = useCallback(async (sceneId: string, prompt: string, referenceImage?: string) => {
-    // 1. Set Loading State
-    setScenes(prev => prev.map(s => {
-      if (s.id !== sceneId) return s;
-      return {
-        ...s,
-        isLoading: true,
-        error: undefined,
-        versions: saveToHistory(s)
-      };
-    }));
-
-    try {
-      // PROXY FIX: Ensure we send Base64, not URL
-      let validReference = referenceImage;
-      if (referenceImage && referenceImage.startsWith('http')) {
-        validReference = await urlToBase64(referenceImage);
-      }
-
-      // Also check styleReference
-      let validStyleRef = styleReference;
-      if (styleReference && styleReference.startsWith('http')) {
-        validStyleRef = await urlToBase64(styleReference);
-      }
-
-      // 2. Generate Image
-      const base64Image = await generateSceneImage(prompt, imageSize, aspectRatio, artStyle, colorMode, validReference, validStyleRef);
-
-      // Calculate index for strict naming
-      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
-      const safeIndex = sceneIndex >= 0 ? sceneIndex : scenes.length; // Default to end if not found
-
-      // 3. Upload & Persist
-      let finalUrl = base64Image;
-
-      try {
-        // Allow Guest Upload
-        finalUrl = await uploadImageToStorage(user?.uid, projectTitle, safeIndex, base64Image);
-      } catch (e) {
-        console.error("Upload failed during regeneration", e);
-        throw new Error("Image generated but failed to save. Please retry.");
-      }
-    }
-
-      // 4. Update State ONLY after success
-      const scene = scenes.find(s => s.id === sceneId);
-    const finalScene = { ...scene!, imageUrl: finalUrl, prompt, isLoading: false };
-
-    const updatedScenes = scenes.map(s => s.id === sceneId ? finalScene : s);
-    setScenes(updatedScenes);
-
-    // 5. Save to DB
-    if (user && currentProject) {
-      await persistSceneUpdate(finalScene, updatedScenes);
+    // CRITICAL: Force Save Project immediately after ALL are done
+    if (activeProjectId && currentProject) {
+      await saveProject({
+        ...currentProject,
+        id: activeProjectId,
+        title: safeTitle,
+        sceneCount: finalScenes.length
+      }, finalScenes);
+      setLastSaved(new Date());
     }
 
   } catch (err: any) {
-    handleGenerationError(sceneId, err);
+    handleGenerationError('global', err);
+    setIsAnalyzing(false);
   }
+};
+
+const handleGenerationError = (id: string, err: any) => {
+  const errString = err.toString();
+  console.error(err);
+  if (id === 'global') {
+    setError(err.message || "Something went wrong.");
+  } else {
+    setScenes(prev => prev.map(s =>
+      s.id === id ? { ...s, error: "Generation failed. Try retrying.", isLoading: false } : s
+    ));
+  }
+};
+
+const handleRegenerate = useCallback(async (sceneId: string, prompt: string, referenceImage?: string) => {
+  // 1. Set Loading State
+  setScenes(prev => prev.map(s => {
+    if (s.id !== sceneId) return s;
+    return {
+      ...s,
+      isLoading: true,
+      error: undefined,
+      versions: saveToHistory(s)
+    };
+  }));
+
+  try {
+    // PROXY FIX: Ensure we send Base64, not URL
+    let validReference = referenceImage;
+    if (referenceImage && referenceImage.startsWith('http')) {
+      validReference = await urlToBase64(referenceImage);
+    }
+
+    // Also check styleReference
+    let validStyleRef = styleReference;
+    if (styleReference && styleReference.startsWith('http')) {
+      validStyleRef = await urlToBase64(styleReference);
+    }
+
+    // 2. Generate Image
+    const base64Image = await generateSceneImage(prompt, imageSize, aspectRatio, artStyle, colorMode, validReference, validStyleRef);
+
+    // Calculate index for strict naming
+    const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+    const safeIndex = sceneIndex >= 0 ? sceneIndex : scenes.length; // Default to end if not found
+
+    // 3. Upload & Persist
+    let finalUrl = base64Image;
+
+    try {
+      // Allow Guest Upload
+      finalUrl = await uploadImageToStorage(user, projectTitle, safeIndex, base64Image);
+    } catch (e) {
+      console.error("Upload failed during regeneration", e);
+      throw new Error("Image generated but failed to save. Please retry.");
+    }
+  }
+
+      // 4. Update State ONLY after success
+      const scene = scenes.find(s => s.id === sceneId);
+  const finalScene = { ...scene!, imageUrl: finalUrl, prompt, isLoading: false };
+
+  const updatedScenes = scenes.map(s => s.id === sceneId ? finalScene : s);
+  setScenes(updatedScenes);
+
+  // 5. Save to DB
+  if (user && currentProject) {
+    await persistSceneUpdate(finalScene, updatedScenes);
+  }
+
+} catch (err: any) {
+  handleGenerationError(sceneId, err);
+}
 }, [imageSize, aspectRatio, artStyle, colorMode, styleReference, user, projectTitle, currentProject, scenes]);
 
 const handleRefine = useCallback(async (sceneId: string, instruction: string) => {
@@ -494,7 +492,7 @@ const handleRefine = useCallback(async (sceneId: string, instruction: string) =>
     let finalUrl = base64Image;
 
     try {
-      finalUrl = await uploadImageToStorage(user?.uid, projectTitle, safeIndex, base64Image);
+      finalUrl = await uploadImageToStorage(user, projectTitle, safeIndex, base64Image);
       // if (!finalUrl.startsWith('http')) throw new Error("Storage Upload Failed");
     } catch (e) {
       console.error("Upload failed during refine", e);
@@ -536,7 +534,7 @@ const handleUpscale = useCallback(async (sceneId: string) => {
     // 3. Upload
     let finalUrl = base64Image;
     try {
-      finalUrl = await uploadImageToStorage(user?.uid, projectTitle, safeIndex, base64Image);
+      finalUrl = await uploadImageToStorage(user, projectTitle, safeIndex, base64Image);
     } catch (e) {
       // throw new Error("Upscale successful but save failed. Please retry.");
     }
@@ -568,7 +566,7 @@ const handleGenerateVideo = async (sceneId: string) => {
 
     if (true) {
       // Strict Upload: Ensure we own the asset (or guest upload)
-      finalVideoUrl = await uploadVideoToStorage(user?.uid || 'temp_guest', projectTitle, scene.title || `scene_${safeIndex + 1}`, videoUrl);
+      finalVideoUrl = await uploadVideoToStorage(user, projectTitle, scene.title || `scene_${safeIndex + 1}`, videoUrl);
     }
 
     const updatedScene = { ...scene, videoUrl: finalVideoUrl, isVideoLoading: false };
@@ -594,7 +592,7 @@ const handleGenerateAudio = async (sceneId: string) => {
     const safeIndex = scenes.findIndex(s => s.id === sceneId);
 
     if (true) {
-      finalAudioUrl = await uploadAudioToStorage(user?.uid || 'temp_guest', projectTitle, safeIndex, audioUrl);
+      finalAudioUrl = await uploadAudioToStorage(user, projectTitle, safeIndex, audioUrl);
     }
 
     const updatedScene = { ...scene, audioUrl: finalAudioUrl, isAudioLoading: false };

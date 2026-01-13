@@ -367,28 +367,38 @@ const getCompactDate = () => {
   return d.toISOString().split('T')[0].replace(/-/g, ''); // 20260113
 };
 
-export const uploadImageToStorage = async (userId: string | undefined | null, projectName: string, sceneTitle: string, imageData: string): Promise<string> => {
+export const uploadImageToStorage = async (userOrId: any, projectName: string, sceneIndexOrTitle: string | number, imageData: string): Promise<string> => {
   if (!isFirebaseActive) {
     console.warn("Skipping Firebase Upload (Offline)");
     return imageData;
   }
 
-  // Handle Guest Uploads
-  const effectiveUserId = userId || 'temp_guest';
-  const isGuest = effectiveUserId === 'temp_guest';
+  // 1. Resolve User ID and Folder Name
+  let userId = 'guest';
+  let userFolder = `guest_${getCompactDate()}`;
 
-  // FIX: Define safeTitle explicitly to prevent ReferenceError
+  if (userOrId && typeof userOrId === 'object' && userOrId.uid) {
+    // It's a User object
+    userId = userOrId.uid;
+    const safeName = userOrId.displayName ? sanitizeName(userOrId.displayName) : 'user';
+    userFolder = `${safeName}_${userId.substring(0, 6)}`;
+  } else if (typeof userOrId === 'string' && userOrId !== 'temp_guest') {
+    // It's a UID string
+    userId = userOrId;
+    userFolder = `user_${userId.substring(0, 6)}`;
+  }
+
+  // 2. Sanitize Project & Filename
   const safeTitle = sanitizeName(projectName) || 'untitled_project';
-  const safeSceneTitle = sanitizeName(sceneTitle) || 'untitled_scene';
+  const safeScene = typeof sceneIndexOrTitle === 'number'
+    ? `scene_${String(sceneIndexOrTitle + 1).padStart(3, '0')}`
+    : sanitizeName(String(sceneIndexOrTitle));
+
   const fullDate = getCompactDate();
+  const filename = `${safeTitle}_${safeScene}_${fullDate}.png`;
 
-  // Strict Naming: ProjectName_SceneTitle_Date.png
-  const filename = `${safeTitle}_${safeSceneTitle}_${fullDate}.png`;
-
-  // Standard SaaS Pathing: users/{id}/{project}/{file}
-  // For guests: users/guest_{date}/{project}/{file}
-  const folderId = isGuest ? `guest_${fullDate}` : effectiveUserId;
-  const path = `users/${folderId}/${safeTitle}/${filename}`;
+  // 3. Construct Path: users/{UserFolder}/{Project}/{Filename}
+  const path = `users/${userFolder}/${safeTitle}/${filename}`;
 
   try {
     const storageRef = ref(storage, path);
@@ -399,12 +409,11 @@ export const uploadImageToStorage = async (userId: string | undefined | null, pr
 
     await uploadString(storageRef, base64ToUpload, 'data_url');
     const url = await getDownloadURL(storageRef);
-    console.log(`✅ FILE UPLOADED TO: ${path}`); // Critical Audit Log
-    console.log(`Image Uploaded (${isGuest ? 'GUEST' : 'USER'}):`, url);
+    console.log(`✅ UPLOAD SUCCESS: ${path}`);
     return url;
   } catch (error) {
-    console.error("Firebase Storage Upload FAILED:", error);
-    return imageData;
+    console.error("Firebase Upload FAILED:", error);
+    return imageData; // Fallback to local data
   }
 };
 
@@ -462,7 +471,17 @@ export const updateProjectThumbnail = async (projectId: string, thumbnailUrl: st
 export const urlToBase64 = async (url: string): Promise<string> => {
   if (!url || !url.startsWith('http')) return url;
   try {
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    // FIX: Add Cache Buster & CORS Mode
+    const corsUrl = url.includes('?') ? `${url}&t=${Date.now()}` : `${url}?t=${Date.now()}`;
+
+    const response = await fetch(corsUrl, {
+      mode: 'cors',
+      credentials: 'omit',
+      headers: {
+        'Origin': window.location.origin // Explicit origin often helps
+      }
+    });
+
     if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
@@ -472,8 +491,8 @@ export const urlToBase64 = async (url: string): Promise<string> => {
       reader.readAsDataURL(blob);
     });
   } catch (error) {
-    console.error("urlToBase64 Failed:", error);
-    return url;
+    console.warn("urlToBase64 Failed (CORS likely):", error);
+    return url; // Return original URL if conversion fails
   }
 };
 

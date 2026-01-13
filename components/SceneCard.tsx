@@ -323,6 +323,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             ) : (scene.imageUrl || hoveredVersion) ? (
               <>
                 <img
+                  crossOrigin="anonymous"
                   src={hoveredVersion || scene.imageUrl}
                   alt={scene.prompt}
                   className={`

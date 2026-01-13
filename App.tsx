@@ -209,18 +209,31 @@ function App() {
   const handleOpenProject = async (project: Project) => {
     setCurrentProject(project);
     setProjectTitle(project.title);
+    setProcessingStatus(`Loading ${project.title}...`);
+
     try {
       const projectScenes = await getProjectScenes(project.id);
+
+      // Batch State Updates for smoothness
       if (projectScenes.length > 0) {
         setScenes(projectScenes);
       } else {
         setScenes([]);
-        setScript('');
       }
+
+      // UX: Scroll up & Switch View
+      window.scrollTo(0, 0);
       setCurrentView('editor');
+
+      // Success Feedback
+      setProcessingStatus(null);
+      // Ideally use a toast here, but for now console/status clear is sufficient.
+      console.log("Project Loaded:", project.title);
+
     } catch (err) {
       console.error("Error loading project scenes", err);
       setError("Failed to load project.");
+      setProcessingStatus(null);
     }
   };
 

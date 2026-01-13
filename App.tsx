@@ -263,9 +263,9 @@ function App() {
           // 3. Strict Upload (Await to prevent congestion)
           // Ensure valid user ID exists before upload
           const authInstance = getAuthInstance();
-          const currentUserId = authInstance.currentUser?.uid || getGuestId();
+          const activeUserId = authInstance.currentUser?.uid || getGuestId();
 
-          if (!currentUserId) throw new Error("No user ID found for upload");
+          if (!activeUserId) throw new Error("CRITICAL: No user ID found for upload");
 
           // Mark as uploading but keep image visible
           setScenes(current => current.map(s => s.id === scene.id ? { ...localScene, isUploading: true, uploadError: false } : s));

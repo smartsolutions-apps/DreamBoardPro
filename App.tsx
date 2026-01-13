@@ -331,6 +331,11 @@ function App() {
     const safeTitle = projectTitle ? projectTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'untitled_project';
     let activeProjectId = currentProject?.id;
 
+    // --- INSTANT LOCK UI ---
+    setIsAnalyzing(true);
+    setProcessingStatus("Initializing AI Engine...");
+    // -----------------------
+
     // Only create project if user is logged in
     if (user) {
       try {

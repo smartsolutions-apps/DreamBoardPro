@@ -618,7 +618,7 @@ function App() {
     try {
       // Ensure valid user ID
       const authInstance = getAuthInstance();
-      const activeUserId = authInstance.currentUser?.uid || getGuestId();
+      const activeUserId = authInstance.currentUser?.uid;
 
       if (!activeUserId) throw new Error("CRITICAL: No user ID found for upload");
 

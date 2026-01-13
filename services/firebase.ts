@@ -11,7 +11,7 @@ import {
   updateProfile,
   User
 } from "firebase/auth";
-import { getGuestId } from "./auth"; // Import helper
+// Import helper removed
 import { getFirestore, collection, query, orderBy, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, getDoc, setDoc, where, getDocs } from "firebase/firestore/lite";
 import { getStorage, ref, uploadString, getDownloadURL } from "firebase/storage";
 import { Project, StoryScene } from "../types";
@@ -271,7 +271,7 @@ export const getAuthInstance = () => auth;
 // --- PROJECT MANAGEMENT ---
 
 export const getOrCreateProject = async (userId: string, title: string): Promise<Project> => {
-  const activeUserId = userId || getGuestId(); // Auto-fallback to Guest ID
+  const activeUserId = userId;
 
   // Force local mode if Firebase is down or user is the mock user
   if (activeUserId === MOCK_USER_ID || !isFirebaseActive || activeUserId.startsWith('guest_')) {
@@ -342,7 +342,7 @@ export const getUserProjects = async (userId: string): Promise<Project[]> => {
 export const getProjectScenes = async (projectId: string): Promise<StoryScene[]> => {
   if (!projectId) return [];
   const authInstance = getAuth();
-  const userId = authInstance.currentUser?.uid || getGuestId();
+  const userId = authInstance.currentUser?.uid;
 
   if (projectId.startsWith('local-') || !isFirebaseActive) {
     const scenes = await localGetFromIndex('scenes', 'projectId', projectId);

@@ -11,17 +11,18 @@ import {
 
 const LS_AUTH_KEY = 'dreamBoard_localGuest';
 
-export const getGuestId = (): string => {
-    // FIX: Strictly reuse existing ID to prevent data loss on refresh
-    const existingId = localStorage.getItem('dreamBoard_guestId');
-    if (existingId) {
-        return existingId;
+export const ensureAuthenticated = async (): Promise<string> => {
+    if (auth.currentUser) {
+        return auth.currentUser.uid;
     }
-
-    // Generate new if totally missing
-    const newGuestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('dreamBoard_guestId', newGuestId);
-    return newGuestId;
+    try {
+        const user = await signInAsGuest();
+        if (user) return user.uid;
+        throw new Error("Guest login failed");
+    } catch (e) {
+        console.error("Auth Error", e);
+        throw e;
+    }
 };
 
 export const loginWithGoogle = async () => {

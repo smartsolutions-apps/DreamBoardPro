@@ -17,7 +17,7 @@ import { LoginScreen } from './components/LoginScreen';
 // Services
 import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue, STYLE_DEFINITIONS } from './services/geminiService';
 import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, uploadVideoToStorage, saveProject } from './services/firebase';
-import { logout, getGuestId } from './services/auth';
+import { logout, ensureAuthenticated } from './services/auth';
 
 // Types
 import { ImageSize, AspectRatio, StoryScene, ColorMode, ArtStyle, SceneVersion, SceneTemplate, Project } from './types';
@@ -266,8 +266,7 @@ function App() {
 
           // 3. Strict Upload (Await to prevent congestion)
           // Ensure valid user ID exists before upload (FORCE FRESH ID)
-          const authInstance = getAuthInstance();
-          const activeUserId = authInstance.currentUser?.uid || getGuestId();
+          const activeUserId = await ensureAuthenticated();
 
           if (!activeUserId) throw new Error("CRITICAL: No user ID found for upload");
 

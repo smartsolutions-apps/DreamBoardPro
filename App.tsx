@@ -102,7 +102,7 @@ function App() {
 
   // --- SETTINGS PERSISTENCE ---
   useEffect(() => {
-    localStorage.setItem('cached_settings', JSON.stringify({
+    localStorage.setItem('user_prefs', JSON.stringify({
       sceneCount,
       aspectRatio,
       artStyle,
@@ -138,11 +138,11 @@ function App() {
   useEffect(() => {
     // RESTORE ON MOUNT
     const cached = localStorage.getItem('cached_story');
-    const cachedSettings = localStorage.getItem('cached_settings');
+    const userPrefs = localStorage.getItem('user_prefs');
 
-    if (cachedSettings) {
+    if (userPrefs) {
       try {
-        const settings = JSON.parse(cachedSettings);
+        const settings = JSON.parse(userPrefs);
         if (settings.sceneCount) setSceneCount(settings.sceneCount);
         if (settings.aspectRatio) setAspectRatio(settings.aspectRatio);
         if (settings.artStyle) setArtStyle(settings.artStyle);
@@ -239,7 +239,7 @@ function App() {
     if (window.confirm("Start a new project? This will clear your current workspace.")) {
       // 1. Clear Cache
       localStorage.removeItem('cached_story');
-      // Note: We deliberately KEEP cached_settings
+      // Note: We deliberately KEEP user_prefs
 
       // 2. Reset State
       setScript('');

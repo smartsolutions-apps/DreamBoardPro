@@ -209,6 +209,11 @@ function App() {
   const handleOpenProject = async (project: Project) => {
     setCurrentProject(project);
     setProjectTitle(project.title);
+
+    // RESTORE FULL STATE
+    if (project.script) setScript(project.script);
+    if (project.characterSheet) setCharacterSheet(project.characterSheet);
+
     setProcessingStatus(`Loading ${project.title}...`);
 
     try {
@@ -227,7 +232,6 @@ function App() {
 
       // Success Feedback
       setProcessingStatus(null);
-      // Ideally use a toast here, but for now console/status clear is sufficient.
       console.log("Project Loaded:", project.title);
 
     } catch (err) {
@@ -623,7 +627,10 @@ function App() {
   const handleUpscale = useCallback(async (sceneId: string) => {
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
     const scene = scenes.find(s => s.id === sceneId);
-    if (!scene?.imageUrl) return;
+    if (!scene?.imageUrl) {
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
+      return;
+    }
 
     try {
       let sourceImage = scene.imageUrl;
@@ -641,7 +648,7 @@ function App() {
       try {
         finalUrl = await uploadImageToStorage(user || 'guest', projectTitle || 'Untitled', storageName, base64Image);
       } catch (e) {
-        console.error("Upscale upload failed", e);
+        // Log/Warn
       }
 
       const localScene = { ...scene, imageUrl: finalUrl, isLoading: false };
@@ -653,6 +660,8 @@ function App() {
       }
     } catch (err: any) {
       handleGenerationError(sceneId, err);
+    } finally {
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
     }
   }, [scenes, aspectRatio, user, projectTitle, currentProject]);
 

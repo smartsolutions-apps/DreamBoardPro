@@ -15,12 +15,15 @@ export const ensureAuthenticated = async (): Promise<string> => {
     if (auth.currentUser) {
         return auth.currentUser.uid;
     }
+    // No Silent Guest Login. Force Google Sign-In.
     try {
-        const user = await signInAsGuest();
+        const user = await loginWithGoogle();
         if (user) return user.uid;
-        throw new Error("Guest login failed");
+        throw new Error("Sign-in cancelled");
     } catch (e) {
-        console.error("Auth Error", e);
+        // If popup blocked or closed, we throw. 
+        // App.tsx should handle this gracefully (e.g. show a button).
+        console.error("Authentication required to save", e);
         throw e;
     }
 };

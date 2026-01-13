@@ -17,7 +17,7 @@ import { LoginScreen } from './components/LoginScreen';
 // Services
 import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue, STYLE_DEFINITIONS } from './services/geminiService';
 import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, uploadVideoToStorage, saveProject } from './services/firebase';
-import { logout, ensureAuthenticated } from './services/auth';
+import { logout, ensureAuthenticated, loginWithGoogle } from './services/auth';
 
 // Types
 import { ImageSize, AspectRatio, StoryScene, ColorMode, ArtStyle, SceneVersion, SceneTemplate, Project } from './types';
@@ -30,7 +30,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   // --- App View State ---
-  const [currentView, setCurrentView] = useState<ViewMode>('studio');
+  const [currentView, setCurrentView] = useState<ViewMode>('editor');
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [projectTitle, setProjectTitle] = useState('');
@@ -81,24 +81,11 @@ function App() {
       if (currentUser) {
         setUser(currentUser);
         loadProjects(currentUser.uid);
-        setAuthLoading(false);
       } else {
-        // Fallback: Check for Local Guest User (created if domain auth fails)
-        const localGuest = localStorage.getItem('dreamBoard_localGuest');
-        if (localGuest) {
-          try {
-            const guestUser = JSON.parse(localGuest);
-            setUser(guestUser);
-            loadProjects(guestUser.uid);
-          } catch (e) {
-            console.error("Failed to parse local guest", e);
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-        }
-        setAuthLoading(false);
+        setUser(null);
+        setProjects([]);
       }
+      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -934,38 +921,40 @@ function App() {
               <span className="hidden sm:inline">{currentView === 'editor' ? 'Studio' : 'Editor'}</span>
             </button>
 
-            <div className={`flex items-center gap-3 ${!user || user.isAnonymous ? 'cursor-pointer hover:bg-gray-50 p-1 rounded-lg transition-colors' : ''}`}
-              onClick={() => {
-                if (!user || user.isAnonymous) {
-                  signInUser().then(setUser).catch(console.error);
-                }
-              }}
-            >
-              <div className="hidden sm:flex flex-col items-end mr-2">
-                <span className="text-xs font-bold text-gray-700">
-                  {user && !user.isAnonymous ? (user.displayName || 'Creator') : 'Guest User'}
-                </span>
-                <span className="text-[10px] text-gray-400">
-                  {user && !user.isAnonymous ? user.email : 'Click to Sign In'}
-                </span>
-              </div>
-              {user && !user.isAnonymous && user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-gray-200" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center"><UserIcon size={16} /></div>
-              )}
-
-              {user && !user.isAnonymous && (
+            <div className="flex items-center gap-3">
+              {!user ? (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent triggering sign-in
-                    handleLogout();
-                  }}
-                  className="p-2 text-gray-400 hover:text-red-500 transition hover:bg-red-50 rounded-lg"
-                  title="Sign Out"
+                  onClick={() => loginWithGoogle().then(setUser).catch(console.error)}
+                  className="bg-brand-600 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md hover:bg-brand-700 transition-colors flex items-center gap-2"
                 >
-                  <LogOut size={20} />
+                  <UserIcon size={18} /> Sign In
                 </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex flex-col items-end mr-2">
+                    <span className="text-xs font-bold text-gray-700">
+                      {user.displayName || 'Creator'}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {user.email}
+                    </span>
+                  </div>
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-gray-200" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center"><UserIcon size={16} /></div>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLogout();
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-500 transition hover:bg-red-50 rounded-lg"
+                    title="Sign Out"
+                  >
+                    <LogOut size={20} />
+                  </button>
+                </div>
               )}
             </div>
 

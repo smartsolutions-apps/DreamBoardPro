@@ -346,6 +346,7 @@ function App() {
         prompt,
         isLoading: true,
         versions: [],
+        assetHistory: [], // Initialize empty
         projectId: activeProjectId
       }));
 
@@ -423,7 +424,7 @@ function App() {
             id: Date.now().toString(),
             type: 'illustration',
             url: cloudUrl,
-            prompt: finalScene.prompt,
+            prompt: currentScene.prompt,
             createdAt: Date.now()
           };
 
@@ -640,11 +641,26 @@ function App() {
 
       // 4. Update State
       const localScene = { ...scene, imageUrl: finalUrl, isLoading: false };
-      const updatedScenes = scenes.map(s => s.id === sceneId ? localScene : s);
+
+      // Add to History
+      const newAsset: AssetVersion = {
+        id: Date.now().toString(),
+        type: 'illustration',
+        url: finalUrl,
+        prompt: instruction, // The refine instruction
+        createdAt: Date.now()
+      };
+
+      const finalScene = {
+        ...localScene,
+        assetHistory: [...(scene.assetHistory || []), newAsset]
+      };
+
+      const updatedScenes = scenes.map(s => s.id === sceneId ? finalScene : s);
       setScenes(updatedScenes);
 
       if (currentProject) {
-        await persistSceneUpdate(localScene, updatedScenes);
+        await persistSceneUpdate(finalScene, updatedScenes);
       }
 
     } catch (err: any) {

@@ -2,6 +2,35 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ImageSize, AspectRatio, ColorMode, ArtStyle } from "../types";
 import { urlToBase64 } from "./firebase";
 
+// --- STYLE DEFINITIONS ---
+const STYLE_DEFINITIONS: Record<string, string> = {
+  "Pencil Sketch": "Rough graphite textures, visible cross-hatching, sketch paper grain, loose and expressive lines, artistic shading.",
+  "Ink & Line Art": "Clean crisp black ink lines, cross-hatching shading, comic book inking style, high contrast, no gradients.",
+  "Minimalist Vector": "Flat colors, geometric shapes, clean lines, corporate memphis style, no textures, high vector quality.",
+  "Watercolor": "Bleeding wet paint edges, soaking paper texture, soft translucent colors, artistic brush blobs, dreamy atmosphere.",
+  "Western Comic Book": "Thick black ink outlines, halftone dot shading, vibrant flat coloring, Ben-Day dots, dynamic action lines, Marvel/DC aesthetic.",
+  "Anime / Manga": "Cel-shaded, distinct line art, high-quality anime production, Studio Ghibli inspired, soft lighting, expressive character design.",
+  "Retro 80s": "Neon grid aesthetics, synthwave colors (magenta, cyan), VHS noise grain, chrome reflections, retro-futurism.",
+  "Ghibli Style": "Hand-painted backgrounds, lush greenery, soft natural lighting, gouache textures, whimsical and nostalgic atmosphere.",
+  "Oil Painting": "Thick impasto brushstrokes, textured canvas visibility, visible mixing of paints, classical artistic technique, rich depth.",
+  "Frank Miller Style (High Contrast)": "Extreme high contrast, pure black shadows (chiaroscuro), stark white highlights, gritty noir atmosphere, sin city aesthetic.",
+  "Film Noir": "Cinematic high contrast black and white, dramatic shadows, dutch angles, foggy atmosphere, detective movie aesthetic.",
+  "Claymation": "Plasticine textures, fingerprint marks on clay, stop-motion lighting style, shallow depth of field, Aardman animation style.",
+  "3D Animation (Pixar style)": "Subsurface scattering, soft ambient occlusion, bright vibrant colors, appealing character proportions, RenderMan quality.",
+  "Cyberpunk": "High-tech low-life, neon sign lighting, rain-slicked streets, metallic textures, holographic overlays, dark atmosphere.",
+  "Digital Concept Art": "Speedpaint aesthetic, tablet brush strokes, epic scale, atmospheric perspective, ArtStation trending quality.",
+  "Cinematic Realistic": "8k resolution, photorealistic textures, ray-traced lighting, anamorphic lens flares, movie set production quality.",
+  "Charcoal Drawing": "Rough charcoal texture, smudged shadows, deep blacks and greys, sketch paper texture, artistic messiness."
+};
+
+const BW_FORCED_STYLES = [
+  "Pencil Sketch",
+  "Ink & Line Art",
+  "Charcoal Drawing",
+  "Film Noir",
+  "Frank Miller Style (High Contrast)"
+];
+
 const getAiClient = () => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   console.log("Gemini Key Present:", !!apiKey);
@@ -129,11 +158,28 @@ const cleanPromptText = (text: string): string => {
 const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode) => {
   const cleanedPrompt = cleanPromptText(prompt);
 
-  const colorInstruction = colorMode === ColorMode.BlackAndWhite
-    ? "Black and white, high contrast, traditional ink storyboard style, charcoal sketch, monochrome, no color."
+  // 1. Get Rich Style Description
+  let styleDescription = STYLE_DEFINITIONS[style] || style;
+
+  // 2. Enforce Color Logic
+  let colorInstruction = colorMode === ColorMode.BlackAndWhite
+    ? "Black and white, high contrast, monochromatic, no color."
     : "Full color, vibrant, professional lighting.";
 
-  return `Create a storyboard image. Style: ${style}. Mode: ${colorInstruction}. Subject: ${cleanedPrompt}. Ensure high quality, detailed composition. Do not render text, titles, or UI elements.`;
+  // Override for specific styles
+  if (BW_FORCED_STYLES.includes(style)) {
+    colorInstruction = "Strictly Black and White, Monochromatic, Greyscale. NO COLOR.";
+  }
+
+  // 3. Construct Prompt: [STYLE] + [COLOR] + [SUBJECT]
+  return `
+    Create a professional storyboard image.
+    VISUAL STYLE: ${styleDescription}
+    COLOR PALETTE: ${colorInstruction}
+    SCENE ACTION: ${cleanedPrompt}
+    
+    Ensure high quality, detailed composition. Do not render text, titles, or UI elements.
+  `.trim();
 };
 
 // --- VALIDATION HELPER ---

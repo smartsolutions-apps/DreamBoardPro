@@ -109,7 +109,8 @@ export const ART_STYLES = [
   "3D Animation (Pixar style)",
   "Cyberpunk",
   "Digital Concept Art",
-  "Cinematic Realistic"
+  "Cinematic Realistic",
+  "Charcoal Drawing"
 ] as const;
 
 export type ArtStyle = typeof ART_STYLES[number];

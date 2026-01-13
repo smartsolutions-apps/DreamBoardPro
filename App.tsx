@@ -217,14 +217,21 @@ function App() {
     setProcessingStatus(`Loading ${project.title}...`);
 
     try {
-      const projectScenes = await getProjectScenes(project.id);
+      const rawScenes = await getProjectScenes(project.id);
+
+      // Fix: Ghost State Cleanup (Ensure loaded scenes are explicitly not loading)
+      const cleanScenes = rawScenes.map(s => ({
+        ...s,
+        isLoading: false,
+        isUploading: false,
+        isAudioLoading: false,
+        isVideoLoading: false,
+        assetHistory: s.assetHistory || [],
+        versions: s.versions || []
+      }));
 
       // Batch State Updates for smoothness
-      if (projectScenes.length > 0) {
-        setScenes(projectScenes);
-      } else {
-        setScenes([]);
-      }
+      setScenes(cleanScenes);
 
       // UX: Scroll up & Switch View
       window.scrollTo(0, 0);

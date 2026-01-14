@@ -669,6 +669,82 @@ function App() {
     }
   }, [imageSize, aspectRatio, artStyle, colorMode, styleReference, user, projectTitle, currentProject, scenes, characterSheet]);
 
+  const handleRegenerate = useCallback(async (sceneId: string, promptOverride?: string, referenceImageOverride?: string) => {
+    // 1. Set Loading
+    setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
+    const scene = scenes.find(s => s.id === sceneId);
+
+    if (!scene) return;
+
+    try {
+      // 2. Prepare Inputs
+      const promptToUse = promptOverride || scene.prompt;
+
+      // Resolve consistency data
+      const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
+
+      // FORCE: Enforce Style and Reference in the prompt itself
+      const styleInstruction = `STYLE: ${artStyle} (Strict). NO realistic photos.`;
+      const finalPrompt = `${styleInstruction} \n\n ${promptToUse} \n\n Keep character consistent.`;
+
+      // 3. Generate Image
+      const base64Image = await generateSceneImage(
+        finalPrompt,
+        imageSize,
+        aspectRatio,
+        artStyle,
+        colorMode,
+        referenceImageOverride || scene.referenceImage, // Structural Reference
+        styleReference,  // Art Style Reference
+        masterStylePrompt,
+        characterSheet
+      );
+
+      // 3. Upload Immediately
+      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
+      const storageName = `scene_${String(indexNum).padStart(3, '0')}_regen_${Date.now()}`;
+
+      let finalUrl = base64Image;
+      try {
+        finalUrl = await uploadImageToStorage(user || 'guest', projectTitle || 'Untitled', storageName, base64Image);
+      } catch (e) {
+        console.error("Upload failed", e);
+      }
+
+      // 4. Update State & History
+      const newAsset: AssetVersion = {
+        id: Date.now().toString(),
+        type: 'illustration',
+        url: finalUrl,
+        prompt: promptToUse,
+        createdAt: Date.now()
+      };
+
+      const finalScene = {
+        ...scene,
+        imageUrl: finalUrl,
+        prompt: promptToUse,
+        referenceImage: referenceImageOverride || scene.referenceImage,
+        isLoading: false,
+        assetHistory: [...(scene.assetHistory || []), newAsset]
+      };
+
+      const updatedScenes = scenes.map(s => s.id === sceneId ? finalScene : s);
+      setScenes(updatedScenes);
+
+      // 5. Persist
+      if (currentProject) {
+        await persistSceneUpdate(finalScene, updatedScenes);
+      }
+
+    } catch (err: any) {
+      handleGenerationError(sceneId, err);
+    } finally {
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
+    }
+  }, [scenes, imageSize, aspectRatio, artStyle, colorMode, styleReference, user, projectTitle, currentProject, characterSheet]);
+
   const handleRefine = useCallback(async (sceneId: string, instruction: string) => {
     // 1. Set Loading
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));

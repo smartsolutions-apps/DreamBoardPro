@@ -24,6 +24,9 @@ import { ImageSize, AspectRatio, StoryScene, ColorMode, ArtStyle, SceneVersion, 
 
 type ViewMode = 'editor' | 'studio';
 
+// FORCE CACHE BUST
+const APP_VERSION = '1.0.6-' + Date.now();
+
 function App() {
   // --- Auth State ---
   const [user, setUser] = useState<User | null>(null);
@@ -79,6 +82,18 @@ function App() {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  // --- Cache Clearing Effect ---
+  useEffect(() => {
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => {
+          console.log("Clearing cache:", name);
+          caches.delete(name);
+        });
+      });
+    }
+  }, []);
 
   // --- Auth Effect ---
   useEffect(() => {
@@ -1721,7 +1736,7 @@ function App() {
 
       <ChatWidget />
       <div className="fixed bottom-2 right-2 text-xs text-gray-400 opacity-50 pointer-events-none z-[100]">
-        DreamBoard Pro v1.0.5 - handleRegenerate Restored
+        DreamBoard Pro {APP_VERSION} - handleRegenerate Restored
       </div>
     </div>
   );

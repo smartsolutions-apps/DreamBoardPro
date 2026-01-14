@@ -569,12 +569,12 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             </div>
 
             <button
-              onClick={handleRegenerate}
-              disabled={isLoading}
-              title={`Regenerate with style: ${style || 'Current Settings'}`}
-              className={`p-2 rounded-full transition-colors ${isLoading ? 'bg-gray-100 text-gray-400' : 'hover:bg-blue-100 text-blue-600'}`}
+              onClick={() => onRegenerate(scene.id, scene.prompt)}
+              disabled={scene.isLoading}
+              title={`Regenerate with style: ${scene.filter || 'Current Settings'}`}
+              className={`p-2 rounded-full transition-colors ${scene.isLoading ? 'bg-gray-100 text-gray-400' : 'hover:bg-blue-100 text-blue-600'}`}
             >
-              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={scene.isLoading ? 'animate-spin' : ''} />
             </button>
 
             <div className="relative">

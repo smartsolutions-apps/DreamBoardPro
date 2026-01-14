@@ -525,7 +525,7 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
 
     let operation = await ai.models.generateVideos({
       model: VIDEO_MODEL,
-      prompt: `Cinematic camera movement. ${cleanPromptText(prompt)}`,
+      prompt: `Cinematic camera movement. ${cleanPromptText(prompt)}. LIP SYNC RULE: Focus on the active speaker. Listening characters must react emotionally but KEEP MOUTHS CLOSED. Only one character speaks at a time.`,
       image: {
         imageBytes: base64Data,
         mimeType: 'image/png',

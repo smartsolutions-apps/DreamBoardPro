@@ -825,10 +825,9 @@ function App() {
       const videoUrl = await generateSceneVideo(scene.imageUrl, scene.prompt, aspectRatio);
 
       let finalVideoUrl = videoUrl;
-      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
-      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
-      // Fix: Ensure strict string naming
-      const storageName = `scene_${String(indexNum).padStart(3, '0')}_video_${Date.now()}`; // Unique name
+      // Fix: Use scene.number for stable naming
+      const indexNum = scene.number || 0;
+      const storageName = `scene_${String(indexNum).padStart(3, '0')}_video_${Date.now()}`;
 
       try {
         // Convert URL to Base64/Blob Data for Upload
@@ -883,9 +882,8 @@ function App() {
       const audioUrl = await generateNarration(scene.prompt);
 
       let finalAudioUrl = audioUrl;
-      const sceneIndex = scenes.findIndex(s => s.id === sceneId);
-      const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
 
+      const indexNum = scene.number || 0;
       const storageName = `scene_${String(indexNum).padStart(3, '0')}_audio_${Date.now()}`;
 
       try {

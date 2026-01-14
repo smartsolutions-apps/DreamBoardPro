@@ -409,6 +409,7 @@ function App() {
 
       const initialScenes: StoryScene[] = prompts.map((prompt, index) => ({
         id: `scene-${Date.now()}-${index}`,
+        number: index + 1, // Strict ordering
         title: `Scene ${index + 1}`,
         prompt,
         isLoading: true,
@@ -627,12 +628,36 @@ function App() {
       }
 
       // 6. Update History
+      const timestamp = Date.now();
+
+      // PRESERVE OLD VERSION FIRST
+      let currentAssetHistory = [...(scene.assetHistory || [])];
+
+      // If the current image isn't in history yet, add it
+      if (scene.imageUrl && !currentAssetHistory.some(a => a.url === scene.imageUrl)) {
+        currentAssetHistory.push({
+          id: `legacy-${timestamp}`,
+          type: 'illustration',
+          url: scene.imageUrl,
+          prompt: scene.prompt,
+          createdAt: timestamp - 1000
+        });
+      }
+
       const newVersion: SceneVersion = {
-        id: Date.now().toString(),
+        id: timestamp.toString(),
         imageUrl: finalUrl, // Legacy support
         url: finalUrl,      // New Standard
-        timestamp: Date.now(),
+        timestamp: timestamp,
         prompt: finalPrompt
+      };
+
+      const newAssetVersion: AssetVersion = {
+        id: timestamp.toString(),
+        type: 'illustration',
+        url: finalUrl,
+        prompt: finalPrompt,
+        createdAt: timestamp
       };
 
       // Update Scene Object
@@ -641,7 +666,7 @@ function App() {
         imageUrl: finalUrl,
         prompt: promptToUse,
         isLoading: false,
-        assetHistory: [...(scene.assetHistory || []), newVersion],
+        assetHistory: [...currentAssetHistory, newAssetVersion],
         versions: [...(scene.versions || []), newVersion] // Keep legacy sync
       };
 
@@ -708,17 +733,31 @@ function App() {
       const localScene = { ...scene, imageUrl: finalUrl, isLoading: false };
 
       // Add to History
+      const timestamp = Date.now();
+      let currentAssetHistory = [...(scene.assetHistory || [])];
+
+      // PRESERVE OLD VERSION
+      if (scene.imageUrl && !currentAssetHistory.some(a => a.url === scene.imageUrl)) {
+        currentAssetHistory.push({
+          id: `legacy-${timestamp}`,
+          type: 'illustration',
+          url: scene.imageUrl,
+          prompt: scene.prompt,
+          createdAt: timestamp - 1000
+        });
+      }
+
       const newAsset: AssetVersion = {
-        id: Date.now().toString(),
+        id: timestamp.toString(),
         type: 'illustration',
         url: finalUrl,
         prompt: instruction, // The refine instruction
-        createdAt: Date.now()
+        createdAt: timestamp
       };
 
       const finalScene = {
         ...localScene,
-        assetHistory: [...(scene.assetHistory || []), newAsset]
+        assetHistory: [...currentAssetHistory, newAsset]
       };
 
       const updatedScenes = scenes.map(s => s.id === sceneId ? finalScene : s);
@@ -1650,7 +1689,7 @@ function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {filteredScenes.map((scene, index) => (
+                  {filteredScenes.sort((a, b) => (a.number || 0) - (b.number || 0)).map((scene, index) => (
                     <SceneCard
                       key={scene.id}
                       index={index}
@@ -1682,6 +1721,7 @@ function App() {
                       const newId = `scene-${Date.now()}`;
                       const newScene: StoryScene = {
                         id: newId,
+                        number: scenes.length + 1,
                         title: `Scene ${scenes.length + 1}`,
                         prompt: "New Scene - Click Edit to add details",
                         imageUrl: "https://placehold.co/600x400?text=New+Scene",

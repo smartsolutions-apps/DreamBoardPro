@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Search, Tag, Copy, Trash, Image as ImageIcon, Check, Video, Mic, RefreshCw, Film, Music } from 'lucide-react';
 import { StoryScene, AssetVersion } from '../types';
+import { MediaPreviewModal } from './MediaPreviewModal';
 
 interface ImageLibraryProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface ImageLibraryProps {
 export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, scenes, onRestoreAsset, onDeleteAsset }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<AssetVersion | null>(null);
 
   // Group assets by Scene
   const sceneGroups = scenes.map(scene => {
@@ -35,13 +37,14 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, sce
       scene,
       assets
     };
-  }).filter(group => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return group.scene.prompt.toLowerCase().includes(term) ||
-      group.scene.title?.toLowerCase().includes(term) ||
-      `scene ${scenes.indexOf(group.scene) + 1}`.includes(term);
-  });
+  }).sort((a, b) => (a.scene.number || 0) - (b.scene.number || 0)) // STRICT SORTING BY SCENE NUMBER
+    .filter(group => {
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      return group.scene.prompt.toLowerCase().includes(term) ||
+        group.scene.title?.toLowerCase().includes(term) ||
+        `scene ${group.scene.number}`.includes(term);
+    });
 
   const getIconForType = (type: string) => {
     switch (type) {
@@ -139,6 +142,12 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, sce
                         </div>
                       )}
 
+                      {/* Click to Preview Overlay */}
+                      <div
+                        className="absolute inset-0 cursor-pointer"
+                        onClick={() => setPreviewAsset(asset)}
+                      />
+
                       {/* Hover Actions */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-auto gap-1">
                         {!isActive && (
@@ -189,6 +198,14 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, sce
           </div>
         )}
       </div>
+
+      {/* Media Preview Modal */}
+      {previewAsset && (
+        <MediaPreviewModal
+          asset={previewAsset}
+          onClose={() => setPreviewAsset(null)}
+        />
+      )}
     </div>
   );
 };

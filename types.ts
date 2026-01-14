@@ -22,6 +22,7 @@ export interface AssetVersion {
 
 export interface StoryScene {
   id: string;
+  number: number; // For strict ordering
   title?: string;
   prompt: string;
   imageUrl?: string;

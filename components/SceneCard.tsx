@@ -315,6 +315,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             {scene.videoUrl && !videoError ? (
               <video
                 src={scene.videoUrl}
+                controls
                 autoPlay
                 loop
                 muted

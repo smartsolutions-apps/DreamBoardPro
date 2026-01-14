@@ -320,7 +320,7 @@ export const refineSceneImage = async (
 
     const base64Data = originalImage.split(',')[1] || originalImage;
     // We don't clean instruction here usually as it's a command, but we enforce style/mode
-    const fullPrompt = `Edit this image: ${instruction}. Maintain the following style: ${style}, ${colorMode === ColorMode.BlackAndWhite ? 'Black & White' : 'Color'}. Keep composition similar. Do not add text.`;
+    const fullPrompt = `IMPORTANT: Modify the image significantly to match this new instruction: ${instruction}. Do not just copy the original. (Low change, static, identical) -10. Maintain the following style: ${style}, ${colorMode === ColorMode.BlackAndWhite ? 'Black & White' : 'Color'}. Keep composition similar. Do not add text.`;
 
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,

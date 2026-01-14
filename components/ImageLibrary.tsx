@@ -137,9 +137,7 @@ export const ImageLibrary: React.FC<ImageLibraryProps> = ({ isOpen, onClose, sce
                       </div>
 
                       {isActive && (
-                        <div className="absolute top-2 right-2 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm font-bold animate-pulse">
-                          Active
-                        </div>
+                        <div className="absolute top-2 right-2 w-3 h-3 rounded-full bg-green-500 shadow-lg border border-white animate-pulse" title="Active"></div>
                       )}
 
                       {/* Click to Preview Overlay */}

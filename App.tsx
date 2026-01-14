@@ -930,34 +930,32 @@ function App() {
   // --- RESTORE & DELETE ASSETS ---
 
   const handleRestoreVersion = async (sceneId: string, version: any) => {
-    // Handle legacy SceneVersion (image only) or generic AssetVersion
-    setScenes(prev => prev.map(scene => {
-      if (scene.id !== sceneId) return scene;
+    // 1. Optimistic Update (Immediate)
+    setScenes(prev => prev.map(s => {
+      if (s.id === sceneId) {
+        // Handle different asset types
+        let updates: Partial<StoryScene> = {};
+        if (version.type === 'video') updates.videoUrl = version.url;
+        else if (version.type === 'audio') updates.audioUrl = version.url;
+        else updates.imageUrl = version.url || version.imageUrl;
 
-      const newScene = { ...scene };
-
-      // If it has a type, use it. If not, assume it's a legacy image version.
-      if (version.type === 'video') {
-        newScene.videoUrl = version.url;
-      } else if (version.type === 'audio') {
-        newScene.audioUrl = version.url;
-      } else if (version.type === 'illustration') {
-        newScene.imageUrl = version.url;
-        newScene.prompt = version.prompt || newScene.prompt;
-      } else {
-        // Fallback for SceneVersion
-        newScene.imageUrl = version.imageUrl || version.url;
-        newScene.prompt = version.prompt || newScene.prompt;
+        return { ...s, ...updates, timestamp: Date.now() };
       }
-      return newScene;
+      return s;
     }));
 
-    // Attempt persist (simplified)
+    // 2. Persist
     if (currentProject) {
-      // We defer full persist to state update effect or user action, but explicit save is better
-      // Since we are inside a setter, we can't easily grab the *new* state immediately for saveProject.
-      // But we should try to trigger an update.
-      // For now, simple state update fixes the crash. 
+      const scene = scenes.find(s => s.id === sceneId);
+      if (scene) {
+        let updates: Partial<StoryScene> = {};
+        if (version.type === 'video') updates.videoUrl = version.url;
+        else if (version.type === 'audio') updates.audioUrl = version.url;
+        else updates.imageUrl = version.url || version.imageUrl;
+
+        const updated = { ...scene, ...updates };
+        await saveSceneToFirestore(currentProject.id, updated);
+      }
     }
   };
 
@@ -1629,9 +1627,24 @@ function App() {
               </div>
             )}
 
+            {/* Project Info Bar */}
+            <div className="bg-white border-y border-gray-200 py-3 px-6 mb-6 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40 shadow-sm backdrop-blur-md bg-white/90">
+              <div className="flex items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-black text-gray-800 tracking-tight">{projectTitle || "Untitled Project"}</h2>
+                  <p className="text-xs text-brand-600 font-bold uppercase tracking-wider">{artStyle} • {aspectRatio}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
+                <span className="hidden sm:inline">Created: {new Date().toLocaleDateString()}</span>
+                <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
+                <span>{scenes.length} Scenes</span>
+              </div>
+            </div>
+
             {scenes.length > 0 && (
               <section className="animate-fade-in pb-20">
-                <div className="flex items-center justify-between mb-6 sticky top-20 z-30 bg-gray-50/90 backdrop-blur-sm py-2">
+                <div className="flex items-center justify-between mb-6 sticky top-20 z-30 bg-gray-50/90 backdrop-blur-sm py-2 px-4 shadow-sm rounded-xl mx-4 border border-gray-100">
                   <div className="flex items-center gap-3">
                     <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-200">
                       <LayoutGrid size={20} className="text-gray-600" />

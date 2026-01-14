@@ -353,7 +353,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             )}
 
             {/* Loading Overlay for Video/Audio */}
-            {(scene.isVideoLoading || scene.isAudioLoading) && (
+            {((scene.isVideoLoading && !scene.videoUrl) || scene.isAudioLoading) && (
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-30 backdrop-blur-sm">
                 <div className="bg-white/95 px-5 py-3 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-xl animate-bounce-in">
                   {scene.isVideoLoading ? <Video size={18} className="text-brand-500 animate-pulse" /> : <Music size={18} className="text-brand-500 animate-pulse" />}

@@ -1720,6 +1720,9 @@ function App() {
       )}
 
       <ChatWidget />
+      <div className="fixed bottom-2 right-2 text-xs text-gray-400 opacity-50 pointer-events-none z-[100]">
+        DreamBoard Pro v1.0.5 - handleRegenerate Restored
+      </div>
     </div>
   );
 }

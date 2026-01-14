@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Sparkles, BookOpen, AlertCircle, RefreshCw, Wand2, Layout, FileDown, CheckSquare, Square, FileWarning, X, Image as ImageIcon, PlayCircle, Search, LogOut, LayoutGrid, FolderOpen, Plus, User as UserIcon, Check, Trash2 } from 'lucide-react';
+import { Sparkles, BookOpen, AlertCircle, RefreshCw, Wand2, Layout, FileDown, CheckSquare, Square, FileWarning, X, Image as ImageIcon, PlayCircle, Search, LogOut, LayoutGrid, FolderOpen, Plus, User as UserIcon, Check, Trash2, Loader2 } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import { User } from 'firebase/auth';
 
@@ -61,6 +61,11 @@ function App() {
   /* New Loading State for Serial Progress */
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
 
+  // FIX: Auth Loading State to prevent flicker
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  // FIX: Track specific scene regeneration
+  const [generatingSceneId, setGeneratingSceneId] = useState<string | null>(null);
+
   const [draggedSceneIndex, setDraggedSceneIndex] = useState<number | null>(null);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -86,7 +91,9 @@ function App() {
         setUser(null);
         setProjects([]);
       }
+      // FIX: Stop loading once auth check completes
       setAuthLoading(false);
+      setLoadingAuth(false);
     });
     return () => unsubscribe();
   }, []);
@@ -560,81 +567,92 @@ function App() {
 
 
 
-  const handleRegenerate = useCallback(async (sceneId: string, promptOverride?: string, referenceImageOverride?: string) => {
-    // 1. Set Loading
-    setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
+  const handleRegenerate = async (sceneId: string, promptOverride?: string) => {
+    // 1. Find Scene
     const scene = scenes.find(s => s.id === sceneId);
-
     if (!scene) return;
 
+    // 2. Set Loading State
+    setGeneratingSceneId(sceneId);
+    setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined } : s));
+
     try {
-      // 2. Prepare Inputs
+      // 3. Resolve inputs
       const promptToUse = promptOverride || scene.prompt;
 
-      // Resolve consistency data
+      // Force Style & Consistency
       const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
-
-      // FORCE: Enforce Style and Reference in the prompt itself
       const styleInstruction = `STYLE: ${artStyle} (Strict). NO realistic photos.`;
       const finalPrompt = `${styleInstruction} \n\n ${promptToUse} \n\n Keep character consistent.`;
 
-      // 3. Generate Image
+      // 4. Generate Image
       const base64Image = await generateSceneImage(
         finalPrompt,
         imageSize,
         aspectRatio,
         artStyle,
         colorMode,
-        referenceImageOverride || scene.referenceImage, // Structural Reference
-        styleReference,  // Art Style Reference
+        scene.referenceImage, // Structural Reference
+        styleReference,       // Art Style Reference
         masterStylePrompt,
         characterSheet
       );
 
-      // 3. Upload Immediately
+      // 5. Upload Immediately
       const sceneIndex = scenes.findIndex(s => s.id === sceneId);
       const indexNum = sceneIndex >= 0 ? sceneIndex + 1 : scenes.length + 1;
       const storageName = `scene_${String(indexNum).padStart(3, '0')}_regen_${Date.now()}`;
 
       let finalUrl = base64Image;
       try {
+        // Use existing service
         finalUrl = await uploadImageToStorage(user || 'guest', projectTitle || 'Untitled', storageName, base64Image);
       } catch (e) {
         console.error("Upload failed", e);
       }
 
-      // 4. Update State & History
-      const newAsset: AssetVersion = {
+      // 6. Update History
+      const newVersion: SceneVersion = {
         id: Date.now().toString(),
-        type: 'illustration',
-        url: finalUrl,
-        prompt: promptToUse,
-        createdAt: Date.now()
+        imageUrl: finalUrl, // Legacy support
+        url: finalUrl,      // New Standard
+        timestamp: Date.now(),
+        prompt: finalPrompt
       };
 
-      const finalScene = {
+      // Update Scene Object
+      const updatedScene = {
         ...scene,
         imageUrl: finalUrl,
         prompt: promptToUse,
-        referenceImage: referenceImageOverride || scene.referenceImage,
         isLoading: false,
-        assetHistory: [...(scene.assetHistory || []), newAsset]
+        assetHistory: [...(scene.assetHistory || []), newVersion],
+        versions: [...(scene.versions || []), newVersion] // Keep legacy sync
       };
 
-      const updatedScenes = scenes.map(s => s.id === sceneId ? finalScene : s);
+      const updatedScenes = scenes.map(s => s.id === sceneId ? updatedScene : s);
       setScenes(updatedScenes);
 
-      // 5. Persist
+      // 7. Persist
       if (currentProject) {
-        await persistSceneUpdate(finalScene, updatedScenes);
+        await saveSceneToFirestore(currentProject.id, updatedScene);
+        await saveProject({
+          ...currentProject,
+          sceneCount: updatedScenes.length
+        }, updatedScenes);
       }
 
-    } catch (err: any) {
-      handleGenerationError(sceneId, err);
+    } catch (error: any) {
+      console.error("Regeneration failed", error);
+      // Show error on scene
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false, error: "Regeneration failed." } : s));
     } finally {
+      // Clear global loading
+      setGeneratingSceneId(null);
+      // Ensure scene generic loading is off
       setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
     }
-  }, [scenes, imageSize, aspectRatio, artStyle, colorMode, styleReference, user, projectTitle, currentProject, characterSheet]);
+  };
 
   const handleRefine = useCallback(async (sceneId: string, instruction: string) => {
     // 1. Set Loading
@@ -1190,10 +1208,19 @@ function App() {
     }
   };
 
-  if (authLoading && !script) {
-    // Only show loading if we don't have content (e.g. from cache)
-    // Actually, let's just show the app skeleton to avoid flicker
-    // return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><RefreshCw className="animate-spin text-brand-500" /></div>;
+  // --- RENDER LOGIC WITH LOADING AUTH ---
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="animate-spin text-brand-600" size={48} />
+        <p className="text-gray-500 font-bold animate-pulse">Loading DreamBoard...</p>
+      </div>
+    );
+  }
+
+  // --- SHOW LOGIN SCREEN IF NOT AUTHENTICATED ---
+  if (!user) {
+    return <LoginScreen />;
   }
 
   // --- REMOVED FORCED LOGIN GUARD ---

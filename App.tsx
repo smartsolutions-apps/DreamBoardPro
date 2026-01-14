@@ -16,7 +16,7 @@ import { LoginScreen } from './components/LoginScreen';
 
 // Services
 import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue, STYLE_DEFINITIONS } from './services/geminiService';
-import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, uploadVideoToStorage, saveProject } from './services/firebase';
+import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, uploadVideoToStorage, saveProject, deleteFileFromStorage } from './services/firebase';
 import { logout, ensureAuthenticated, loginWithGoogle } from './services/auth';
 
 // Types
@@ -888,11 +888,66 @@ function App() {
     }
   };
 
-  const handleRestoreVersion = async (sceneId: string, version: SceneVersion) => {
+  // --- RESTORE & DELETE ASSETS ---
+
+  const handleRestoreAsset = async (sceneId: string, asset: AssetVersion) => {
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) return;
-    const updatedScene = { ...scene, imageUrl: version.imageUrl, prompt: version.prompt };
-    setScenes(prev => prev.map(s => s.id !== sceneId ? s : updatedScene));
+
+    // Determine what to update based on asset type
+    const updates: Partial<StoryScene> = {};
+
+    if (asset.type === 'illustration') {
+      updates.imageUrl = asset.url;
+      updates.prompt = asset.prompt; // Restore prompt too? Usually yes.
+    } else if (asset.type === 'video') {
+      updates.videoUrl = asset.url;
+    } else if (asset.type === 'audio') {
+      updates.audioUrl = asset.url;
+    }
+
+    const updatedScene = { ...scene, ...updates };
+    const updatedScenes = scenes.map(s => s.id === sceneId ? updatedScene : s);
+
+    setScenes(updatedScenes);
+
+    // Persist change
+    if (user && currentProject) {
+      await persistSceneUpdate(updatedScene, updatedScenes);
+    }
+  };
+
+  const handleDeleteAsset = async (sceneId: string, assetId: string, assetUrl: string) => {
+    if (!window.confirm("Permanently delete this asset? This cannot be undone.")) return;
+
+    const scene = scenes.find(s => s.id === sceneId);
+    if (!scene) return;
+
+    // 1. Remove from History
+    const updatedHistory = (scene.assetHistory || []).filter(a => a.id !== assetId);
+
+    // 2. Check if it's the ACTIVE asset. If so, clear it.
+    const updates: Partial<StoryScene> = { assetHistory: updatedHistory };
+    if (scene.imageUrl === assetUrl) updates.imageUrl = undefined;
+    if (scene.videoUrl === assetUrl) updates.videoUrl = undefined;
+    if (scene.audioUrl === assetUrl) updates.audioUrl = undefined;
+
+    const updatedScene = { ...scene, ...updates };
+    const updatedScenes = scenes.map(s => s.id === sceneId ? updatedScene : s);
+
+    setScenes(updatedScenes);
+
+    // 3. Delete from Cloud
+    try {
+      await deleteFileFromStorage(assetUrl);
+    } catch (e) {
+      console.error("Cloud delete failed", e);
+    }
+
+    // 4. Persist Metadata
+    if (user && currentProject) {
+      await persistSceneUpdate(updatedScene, updatedScenes);
+    }
   };
 
   const handleUpdateScene = async (id: string, updates: Partial<StoryScene>) => {
@@ -1159,6 +1214,8 @@ function App() {
         isOpen={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
         scenes={scenes}
+        onRestoreAsset={handleRestoreAsset}
+        onDeleteAsset={handleDeleteAsset}
       />
 
       {showAnimatic && <AnimaticPlayer scenes={scenes} onClose={() => setShowAnimatic(false)} />}

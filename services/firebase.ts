@@ -13,7 +13,7 @@ import {
 } from "firebase/auth";
 // Import helper removed
 import { getFirestore, collection, query, orderBy, addDoc, updateDoc, doc, serverTimestamp, deleteDoc, getDoc, setDoc, where, getDocs } from "firebase/firestore/lite";
-import { getStorage, ref, uploadString, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
 import { Project, StoryScene } from "../types";
 
 // CORRECT CONFIGURATION for Dreamboard Pro
@@ -571,6 +571,17 @@ export const uploadVideoToStorage = async (userOrId: any, projectName: string, s
   } catch (error) {
     console.error("Video Upload Failed:", error);
     return videoUrlOrBlob;
+  }
+};
+
+export const deleteFileFromStorage = async (fileUrl: string) => {
+  if (!isFirebaseActive || !fileUrl || !fileUrl.startsWith('http')) return;
+  try {
+    const fileRef = ref(storage, fileUrl);
+    await deleteObject(fileRef);
+    console.log("Deleted file from storage:", fileUrl);
+  } catch (error) {
+    console.warn("Failed to delete file from storage:", error);
   }
 };
 

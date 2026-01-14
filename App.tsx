@@ -1572,15 +1572,15 @@ function App() {
 
                     <button
                       onClick={async () => {
-                        // 1. Pre-Flight Audio Check
-                        const missingAudio = scenes.filter(s => !s.audioUrl);
-                        if (missingAudio.length > 0) {
-                          if (!confirm(`Generating narration for ${missingAudio.length} scenes first. Continue?`)) return;
-                          setProcessingStatus(`Generating Narration for ${missingAudio.length} scenes...`);
+                        const scenesToGenerate = scenes.filter(s => !s.audioUrl);
 
-                          // Serial Generation for safety
-                          for (const s of missingAudio) {
-                            await handleGenerateAudio(s.id);
+                        if (scenesToGenerate.length > 0) {
+                          setProcessingStatus("Preparing your presentation...");
+
+                          for (let i = 0; i < scenesToGenerate.length; i++) {
+                            const scene = scenesToGenerate[i];
+                            setProcessingStatus(`Generating Narration for Scene ${scenes.indexOf(scene) + 1} of ${scenes.length}...`);
+                            await handleGenerateAudio(scene.id);
                           }
                           setProcessingStatus(null);
                         }
@@ -1674,6 +1674,23 @@ function App() {
           scenes={filteredScenes}
           onClose={() => setShowAnimatic(false)}
         />
+      )}
+
+      {/* Global Processing Overlay (Smart Animatic) */}
+      {processingStatus && !isAnalyzing && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl p-8 flex flex-col items-center gap-4 max-w-md text-center shadow-2xl animate-scale-in">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-gray-100 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-brand-600 border-t-transparent rounded-full animate-spin"></div>
+              <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-brand-600 animate-pulse" size={20} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 mb-1">Preparing Presentation</h3>
+              <p className="text-gray-500 font-medium">{processingStatus}</p>
+            </div>
+          </div>
+        </div>
       )}
 
       <ChatWidget />

@@ -122,7 +122,17 @@ export const ART_STYLES = [
   "Cyberpunk",
   "Digital Concept Art",
   "Cinematic Realistic",
-  "Charcoal Drawing"
+  "Charcoal Drawing",
+  "Leonardo da Vinci",
+  "Michelangelo",
+  "Vincent van Gogh",
+  "Pablo Picasso",
+  "Claude Monet",
+  "Salvador Dalí",
+  "Rembrandt",
+  "Andy Warhol",
+  "Frida Kahlo",
+  "Edvard Munch"
 ] as const;
 
 export type ArtStyle = typeof ART_STYLES[number];

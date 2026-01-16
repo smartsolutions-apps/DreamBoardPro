@@ -20,7 +20,17 @@ export const STYLE_DEFINITIONS: Record<string, string> = {
   "Cyberpunk": "High-tech low-life, neon sign lighting, rain-slicked streets, metallic textures, holographic overlays, dark atmosphere.",
   "Digital Concept Art": "Speedpaint aesthetic, tablet brush strokes, epic scale, atmospheric perspective, ArtStation trending quality.",
   "Cinematic Realistic": "8k resolution, photorealistic textures, ray-traced lighting, anamorphic lens flares, movie set production quality.",
-  "Charcoal Drawing": "Rough charcoal texture, smudged shadows, deep blacks and greys, sketch paper texture, artistic messiness."
+  "Charcoal Drawing": "Rough charcoal texture, smudged shadows, deep blacks and greys, sketch paper texture, artistic messiness.",
+  "Leonardo da Vinci": "Renaissance masterpiece, sfumato technique, soft transitions, sepia tones, anatomical precision, sketch-like quality, historical parchment texture.",
+  "Michelangelo": "High Renaissance style, sculptural forms, muscular anatomy, dramatic compositions, fresco texture, classical grandeur, Sistine Chapel aesthetic.",
+  "Vincent van Gogh": "Post-Impressionism, thick impasto brushwork, swirling dynamic lines, vibrant contrasting colors (yellows and blues), emotional intensity, Oil on canvas.",
+  "Pablo Picasso": "Cubism, fragmented geometric shapes, abstract perspective, bold outlines, surreal composition, artistic distortion, avant-garde aesthetic.",
+  "Claude Monet": "Impressionism, loose brushstrokes, capture of light and atmosphere, soft pastel colors, outdoor plein air feel, water lilies aesthetic, blurry edges.",
+  "Salvador Dalí": "Surrealism, dreamlike imagery, melting objects, hyper-realistic detail mixed with absurdity, vast barren landscapes, subconscious symbolism.",
+  "Rembrandt": "Baroque period, strong Chiaroscuro (dramatic lighting), deep dark backgrounds, golden light on subjects, emotional depth, oil painting texture.",
+  "Andy Warhol": "Pop Art, high contrast, screen print texture, bold flat colors, repetitive patterns, celebrity culture aesthetic, commercial art style.",
+  "Frida Kahlo": "Naïve art style, self-portrait aesthetic, vibrant Mexican colors, symbolic imagery, nature elements, surreal and personal usage of space.",
+  "Edvard Munch": "Expressionism, emotional distortion, psychological intensity, flowing lines, dark and moody colors, 'The Scream' aesthetic."
 };
 
 const BW_FORCED_STYLES = [

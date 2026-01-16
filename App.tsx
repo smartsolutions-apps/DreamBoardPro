@@ -18,6 +18,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue, STYLE_DEFINITIONS } from './services/geminiService';
 import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, uploadVideoToStorage, saveProject, deleteFileFromStorage } from './services/firebase';
 import { logout, ensureAuthenticated, loginWithGoogle } from './services/auth';
+import toast from 'react-hot-toast';
 
 // Types
 import { ImageSize, AspectRatio, StoryScene, ColorMode, ArtStyle, SceneVersion, SceneTemplate, Project } from './types';
@@ -78,7 +79,7 @@ function App() {
 
   const [showAnimatic, setShowAnimatic] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [compareState, setCompareState] = useState<{ sceneId: string, version: SceneVersion } | null>(null);
+  const [compareState, setCompareState] = useState<{ sceneId: string, version: SceneVersion | null } | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -1323,11 +1324,12 @@ function App() {
 
       {compareState && (
         <CompareView
+          scene={scenes.find(s => s.id === compareState.sceneId)!}
           currentImage={scenes.find(s => s.id === compareState.sceneId)?.imageUrl || ''}
           version={compareState.version}
           onClose={() => setCompareState(null)}
-          onRestore={() => {
-            handleRestoreVersion(compareState.sceneId, compareState.version);
+          onRestore={(v) => {
+            handleRestoreVersion(compareState.sceneId, v);
             setCompareState(null);
           }}
         />

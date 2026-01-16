@@ -15,7 +15,7 @@ interface SceneCardProps {
   onUpdateScene: (id: string, updates: Partial<StoryScene>) => void;
   onRestoreVersion: (id: string, version: SceneVersion) => void;
   onSaveTemplate: (scene: StoryScene) => void;
-  onCompareVersion: (version: SceneVersion) => void;
+  onCompareVersion: (version: SceneVersion | null) => void;
   onGenerateVideo: (id: string) => void;
   onGenerateAudio: (id: string) => void;
   onDragStart: (e: React.DragEvent, index: number) => void;
@@ -527,12 +527,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
             {/* History Icon */}
             {scene.assetHistory && scene.assetHistory.length > 0 && (
               <button
-                onClick={() => onCompareVersion({
-                  id: scene.assetHistory![scene.assetHistory!.length - 1].id,
-                  imageUrl: scene.assetHistory![scene.assetHistory!.length - 1].url,
-                  prompt: scene.assetHistory![scene.assetHistory!.length - 1].prompt,
-                  timestamp: scene.assetHistory![scene.assetHistory!.length - 1].createdAt
-                })}
+                onClick={() => onCompareVersion(null)}
                 title="Version History"
                 className="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-500 transition-colors"
               >

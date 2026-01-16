@@ -79,7 +79,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [isPreviewingTransition, setIsPreviewingTransition] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [videoError, setVideoError] = useState(false);
-  const [videoError, setVideoError] = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // TRIGGER LOADING WHEN URL CHANGES

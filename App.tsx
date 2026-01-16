@@ -588,22 +588,18 @@ function App() {
     const scene = scenes.find(s => s.id === sceneId);
     if (!scene) return;
 
-    // 2. Set Loading State
+    // 2. Set Visual Loading State
     setGeneratingSceneId(sceneId);
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined } : s));
 
     try {
-      // 3. Resolve inputs
+      // 3. Prepare Prompt
       const promptToUse = promptOverride || scene.prompt;
-
-      // Force Style & Consistency
       const masterStylePrompt = STYLE_DEFINITIONS[artStyle] || artStyle;
       const styleInstruction = `STYLE: ${artStyle} (Strict). NO realistic photos.`;
       const finalPrompt = `${styleInstruction} \n\n ${promptToUse} \n\n Keep character consistent.`;
 
-      // 4 A. PRESERVE OLD VERSION NOW (Safety First)
-      // We do this BEFORE generation so if it fails, we still have the object ready,
-      // and when we finish, we can just push it.
+      // 4 A. PRESERVE OLD VERSION (Safety First)
       let currentAssetHistory = [...(scene.assetHistory || [])];
 
       // If the current image isn't in history yet, store it
@@ -624,8 +620,8 @@ function App() {
         aspectRatio,
         artStyle,
         colorMode,
-        scene.referenceImage, // Structural Reference
-        styleReference,       // Art Style Reference
+        scene.referenceImage,
+        styleReference,
         masterStylePrompt,
         characterSheet
       );
@@ -637,7 +633,6 @@ function App() {
 
       let finalUrl = base64Image;
       try {
-        // Use existing service
         finalUrl = await uploadImageToStorage(user || 'guest', projectTitle || 'Untitled', storageName, base64Image);
       } catch (e) {
         console.error("Upload failed", e);
@@ -645,10 +640,9 @@ function App() {
 
       // 6. Update History
       const timestamp = Date.now();
-
       const newVersion: SceneVersion = {
         id: timestamp.toString(),
-        imageUrl: finalUrl, // Legacy support
+        imageUrl: finalUrl, // Legacy
         url: finalUrl,      // New Standard
         timestamp: timestamp,
         prompt: finalPrompt
@@ -662,36 +656,9 @@ function App() {
         createdAt: timestamp
       };
 
-      // Update Scene Object
-      // Combine the PRESERVED history with the NEW asset
+      // Combine: New + Preserved Old
       const finalHistory = [newAssetVersion, ...currentAssetHistory];
 
-      const updatedScene = {
-        ...scene,
-        imageUrl: finalUrl,
-        prompt: promptToUse,
-        isLoading: false,
-        assetHistory: finalHistory,
-        versions: [...(scene.versions || []), newVersion] // Keep legacy sync
-      };
-
-      const newVersion: SceneVersion = {
-        id: timestamp.toString(),
-        imageUrl: finalUrl, // Legacy support
-        url: finalUrl,      // New Standard
-        timestamp: timestamp,
-        prompt: finalPrompt
-      };
-
-      const newAssetVersion: AssetVersion = {
-        id: timestamp.toString(),
-        type: 'illustration',
-        url: finalUrl,
-        prompt: finalPrompt,
-        createdAt: timestamp
-      };
-
-      // Update Scene Object
       const updatedScene = {
         ...scene,
         imageUrl: finalUrl,
@@ -709,19 +676,17 @@ function App() {
         await saveSceneToFirestore(currentProject.id, updatedScene);
         await saveProject({
           ...currentProject,
-          sceneCount: updatedScenes.length
+          updatedAt: new Date().toISOString()
         }, updatedScenes);
       }
 
+      toast.success("Regeneration Complete!");
     } catch (error: any) {
-      console.error("Regeneration failed", error);
-      // Show error on scene
-      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false, error: "Regeneration failed." } : s));
+      console.error("Regeneration Failed:", error);
+      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false, error: "Failed to regenerate" } : s));
+      toast.error("Failed to regenerate scene");
     } finally {
-      // Clear global loading
       setGeneratingSceneId(null);
-      // Ensure scene generic loading is off
-      setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: false } : s));
     }
   };
 

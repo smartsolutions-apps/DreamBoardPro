@@ -72,10 +72,10 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-const TEXT_MODEL = "gemini-3-flash-preview";
-const IMAGE_MODEL = "gemini-3-pro-image-preview";
-const CHAT_MODEL = "gemini-3-pro-preview";
-const ANALYSIS_MODEL = "gemini-3-pro-preview";
+const TEXT_MODEL = "gemini-1.5-flash";
+const IMAGE_MODEL = "imagen-3.0-fast-generate-001";
+const CHAT_MODEL = "gemini-1.5-flash";
+const ANALYSIS_MODEL = "gemini-1.5-flash";
 const VIDEO_MODEL = "veo-3.1-fast-generate-preview";
 const TTS_MODEL = "gemini-2.5-flash-preview-tts";
 
@@ -564,7 +564,7 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
 
       let operation = await ai.models.generateVideos({
         model: VIDEO_MODEL,
-        prompt: `Cinematic camera movement. ${cleanPromptText(prompt)}.
+        prompt: `Cinematic camera movement. Simple animation, efficient style. ${cleanPromptText(prompt)}.
         LIP SYNC INSTRUCTION: If the character is speaking in the script, they must have clear lip movement. If they are just listening or observing, keep mouth closed.
         Make the animation smooth and realistic.`,
         image: {

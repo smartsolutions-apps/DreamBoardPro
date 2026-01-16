@@ -1679,6 +1679,23 @@ function App() {
                       <PlayCircle size={16} /> Play Animatic
                     </button>
 
+                    {/* REFRESH DATA BUTTON */}
+                    <button
+                      onClick={() => {
+                        if (user) {
+                          toast.promise(loadProjects(user.uid), {
+                            loading: 'Syncing with cloud...',
+                            success: 'Data synced!',
+                            error: 'Sync failed'
+                          });
+                        }
+                      }}
+                      className="flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-brand-600 hover:bg-brand-50 px-3 py-2 rounded-lg border border-transparent hover:border-brand-200 transition-colors"
+                      title="Sync with Cloud"
+                    >
+                      <RefreshCw size={16} /> Sync
+                    </button>
+
                     <button
                       onClick={handleCheckContinuity}
                       className="flex items-center gap-1 text-xs font-bold text-amber-600 hover:bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 transition-colors bg-white"

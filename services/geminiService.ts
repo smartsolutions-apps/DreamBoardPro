@@ -41,6 +41,26 @@ const BW_FORCED_STYLES = [
   "Frank Miller Style (High Contrast)"
 ];
 
+// Rate Limit Retry Wrapper
+async function withRetry<T>(operation: () => Promise<T>, retries = 3, delay = 5000): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      const isQuotaError = error.message?.includes('429') || error.message?.includes('Quota') || error.message?.includes('RESOURCE_EXHAUSTED');
+
+      if (isQuotaError && i < retries - 1) {
+        const waitTime = delay * (i + 1);
+        console.warn(`Quota hit. Retrying in ${waitTime / 1000}s... (Attempt ${i + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
 const getAiClient = () => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   console.log("Gemini Key Present:", !!apiKey);
@@ -283,6 +303,9 @@ export const generateSceneImage = async (
       parts.push({ text: fullPrompt });
     }
 
+  });
+
+  return await withRetry(async () => {
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
       contents: { parts },
@@ -299,12 +322,12 @@ export const generateSceneImage = async (
         return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
-
     throw new Error("No image generated");
-  } catch (error) {
-    console.error("Error generating image:", error);
-    throw error;
-  }
+  });
+} catch (error) {
+  console.error("Error generating image:", error);
+  throw error;
+}
 };
 
 export const refineSceneImage = async (

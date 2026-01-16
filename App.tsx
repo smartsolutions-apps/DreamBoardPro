@@ -214,7 +214,7 @@ function App() {
 
   // --- GOOGLE ONE-TAP ---
   useEffect(() => {
-    if (!user && (window as any).google) {
+    if (!user && !loadingAuth && (window as any).google) {
       try {
         (window as any).google.accounts.id.initialize({
           client_id: "399676823018-86d119100523-289520442308.apps.googleusercontent.com", // Placeholder - often requires real Client ID
@@ -1264,6 +1264,18 @@ function App() {
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-4">
         <Loader2 className="animate-spin text-brand-600" size={48} />
         <p className="text-gray-500 font-bold animate-pulse">Loading DreamBoard...</p>
+      </div>
+    );
+  }
+
+  // --- AUTH GATE ---
+  if (loadingAuth) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-brand-600" size={48} />
+          <p className="text-gray-500 font-medium">Loading DreamBoard...</p>
+        </div>
       </div>
     );
   }

@@ -690,7 +690,7 @@ function App() {
     }
   };
 
-  const handleRefine = useCallback(async (sceneId: string, instruction: string) => {
+  const handleRefine = useCallback(async (sceneId: string, instruction: string, strength: number) => {
     // 1. Set Loading
     setScenes(prev => prev.map(s => s.id === sceneId ? { ...s, isLoading: true, error: undefined, versions: saveToHistory(s) } : s));
     const scene = scenes.find(s => s.id === sceneId);
@@ -710,7 +710,7 @@ function App() {
       }
 
       // 2. Generate
-      const base64Image = await refineSceneImage(sourceImage, instruction, imageSize, aspectRatio, artStyle, colorMode);
+      const base64Image = await refineSceneImage(sourceImage, instruction, imageSize, aspectRatio, artStyle, colorMode, strength);
 
       // 3. Upload Immediately
       const sceneIndex = scenes.findIndex(s => s.id === sceneId);

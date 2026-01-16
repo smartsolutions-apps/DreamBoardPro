@@ -10,7 +10,7 @@ interface SceneCardProps {
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
   onRegenerate: (id: string, newPrompt: string, referenceImage?: string) => void;
-  onRefine: (id: string, instruction: string) => void;
+  onRefine: (id: string, instruction: string, strength: number) => void;
   onUpscale: (id: string) => void;
   onUpdateScene: (id: string, updates: Partial<StoryScene>) => void;
   onRestoreVersion: (id: string, version: SceneVersion) => void;
@@ -94,6 +94,8 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [refImagePreview, setRefImagePreview] = useState<string | undefined>(scene.referenceImage);
   const [refineInstruction, setRefineInstruction] = useState('');
   const [mode, setMode] = useState<'edit' | 'refine'>('edit');
+  const [editStrength, setEditStrength] = useState(50);
+
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [hoveredVersion, setHoveredVersion] = useState<string | null>(null);
 
@@ -135,7 +137,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
 
   const handleRefine = () => {
     if (!refineInstruction.trim()) return;
-    onRefine(scene.id, refineInstruction);
+    onRefine(scene.id, refineInstruction, editStrength);
     setRefineInstruction('');
     setIsEditing(false);
   };
@@ -711,6 +713,25 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                 rows={3}
                 placeholder="What should change?"
               />
+
+              <div className="flex flex-col gap-1 mt-1">
+                <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
+                  <span>Edit Strength</span>
+                  <span>{editStrength}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={editStrength}
+                  onChange={(e) => setEditStrength(parseInt(e.target.value))}
+                  className="w-full accent-indigo-500 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-gray-400 uppercase tracking-wide font-semibold">
+                  <span>Subtle (Tweaks)</span>
+                  <span>Strong (Redraw)</span>
+                </div>
+              </div>
             </div>
           )}
 

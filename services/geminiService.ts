@@ -41,24 +41,29 @@ const BW_FORCED_STYLES = [
   "Frank Miller Style (High Contrast)"
 ];
 
-// Rate Limit Retry Wrapper
-async function withRetry<T>(operation: () => Promise<T>, retries = 3, delay = 5000): Promise<T> {
+// --- HELPER: Place this at the top level (outside other functions) ---
+async function withRetry<T>(operation: () => Promise<T>, retries = 3): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       return await operation();
     } catch (error: any) {
-      const isQuotaError = error.message?.includes('429') || error.message?.includes('Quota') || error.message?.includes('RESOURCE_EXHAUSTED');
+      // Check for Quota/Rate Limit errors
+      const isQuotaError = error.message?.includes('429') ||
+        error.message?.includes('Quota') ||
+        error.message?.includes('RESOURCE_EXHAUSTED');
 
       if (isQuotaError && i < retries - 1) {
-        const waitTime = delay * (i + 1);
-        console.warn(`Quota hit. Retrying in ${waitTime / 1000}s... (Attempt ${i + 1}/${retries})`);
+        const waitTime = (i + 1) * 5000; // 5s, 10s, 15s
+        console.warn(`[Gemini] Quota hit. Retrying in ${waitTime / 1000}s...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
         continue;
       }
+
+      // If it's a real error (or we are out of retries), fail
       throw error;
     }
   }
-  throw new Error("Max retries exceeded");
+  throw new Error("Max retries reached");
 }
 
 const getAiClient = () => {
@@ -219,7 +224,6 @@ const buildPrompt = (prompt: string, style: ArtStyle, colorMode: ColorMode, mast
   }
 
   // 3. Construct Prompt: [STYLE] + [COLOR] + [CHARACTERS] + [SCENE]
-  // 3. Construct Prompt: [STYLE] + [COLOR] + [CHARACTERS] + [SCENE]
   // FORCE: Style must be at the very start for Gemini/Imagen effectiveness.
   const styleHeader = `
   *** ART STYLE ENFORCEMENT ***
@@ -260,7 +264,7 @@ export const generateSceneImage = async (
   masterStylePrompt?: string,
   characterSheet?: string
 ): Promise<string> => {
-  try {
+  return withRetry(async () => {
     const ai = getAiClient();
     const fullPrompt = buildPrompt(prompt, style, colorMode, masterStylePrompt, characterSheet);
 
@@ -303,9 +307,6 @@ export const generateSceneImage = async (
       parts.push({ text: fullPrompt });
     }
 
-  });
-
-  return await withRetry(async () => {
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
       contents: { parts },
@@ -324,10 +325,6 @@ export const generateSceneImage = async (
     }
     throw new Error("No image generated");
   });
-} catch (error) {
-  console.error("Error generating image:", error);
-  throw error;
-}
 };
 
 export const refineSceneImage = async (
@@ -336,9 +333,10 @@ export const refineSceneImage = async (
   size: ImageSize,
   aspectRatio: AspectRatio,
   style: ArtStyle,
-  colorMode: ColorMode
+  colorMode: ColorMode,
+  strength: number = 50
 ): Promise<string> => {
-  try {
+  return withRetry(async () => {
     const ai = getAiClient();
 
     // GUARD: Ensure we have a string
@@ -352,8 +350,16 @@ export const refineSceneImage = async (
     }
 
     const base64Data = originalImage.split(',')[1] || originalImage;
-    // We don't clean instruction here usually as it's a command, but we enforce style/mode
-    const fullPrompt = `IMPORTANT: Modify the image significantly to match this new instruction: ${instruction}. Do not just copy the original. (Low change, static, identical) -10. Maintain the following style: ${style}, ${colorMode === ColorMode.BlackAndWhite ? 'Black & White' : 'Color'}. Keep composition similar. Do not add text.`;
+
+    // Dynamic Prompting based on Strength
+    let strengthPrompt = "";
+    if (strength > 60) {
+      strengthPrompt = "Based on the input image, but you must SIGNIFICANTLY REDRAW the composition to match the new request. Do not be constrained by the original positions or sizes. Be creative and transformative.";
+    } else {
+      strengthPrompt = "Modify the image to match the instruction, but MAINTAIN the original composition, pose, and structure as much as possible. Keep it subtle.";
+    }
+
+    const fullPrompt = `IMPORTANT: ${strengthPrompt} INSTRUCTION: ${instruction}. Style: ${style}, ${colorMode === ColorMode.BlackAndWhite ? 'Black & White' : 'Color'}. Do not add text.`;
 
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
@@ -382,11 +388,9 @@ export const refineSceneImage = async (
       }
     }
     throw new Error("No image generated");
-  } catch (error) {
-    console.error("Error refining image:", error);
-    throw error;
-  }
+  });
 };
+
 
 export const upscaleImage = async (
   originalImage: string,
@@ -526,35 +530,36 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
   }
 
   try {
-    const ai = getAiClient();
-    let base64Data = "";
+    return await withRetry(async () => {
+      const ai = getAiClient();
+      let base64Data = "";
 
-    // GUARD: Ensure we have a string
-    if (!imageUrl || typeof imageUrl !== 'string') {
-      throw new Error("Invalid image input for video generation.");
-    }
-
-    // CRITICAL FIX: Convert URL to Base64 if needed (CORS fix)
-    if (imageUrl.startsWith('http')) {
-      console.log("Fetching remote image for video generation...");
-      const dataUri = await urlToBase64(imageUrl);
-
-      // If conversion fails, urlToBase64 returns the original URL. Check again:
-      if (dataUri.startsWith('http')) {
-        throw new Error("Failed to fetch/convert image for video. Please ensure image is accessible.");
+      // GUARD: Ensure we have a string
+      if (!imageUrl || typeof imageUrl !== 'string') {
+        throw new Error("Invalid image input for video generation.");
       }
 
-      base64Data = dataUri.split(',')[1];
-    } else {
-      // Must be base64
-      base64Data = imageUrl.split(',')[1] || imageUrl;
-    }
+      // CRITICAL FIX: Convert URL to Base64 if needed (CORS fix)
+      if (imageUrl.startsWith('http')) {
+        console.log("Fetching remote image for video generation...");
+        // Note: usage of urlToBase64 here relies on the import from firebase.ts
+        const dataUri = await urlToBase64(imageUrl);
 
-    if (!base64Data) throw new Error("Failed to process input image for video");
+        // If conversion fails, urlToBase64 returns the original URL. Check again:
+        if (dataUri.startsWith('http')) {
+          throw new Error("Failed to fetch/convert image for video. Please ensure image is accessible.");
+        }
 
-    const veoRatio: '9:16' | '16:9' = aspectRatio === AspectRatio.Portrait ? '9:16' : '16:9';
+        base64Data = dataUri.split(',')[1];
+      } else {
+        // Must be base64
+        base64Data = imageUrl.split(',')[1] || imageUrl;
+      }
 
-    return await withRetry(async () => {
+      if (!base64Data) throw new Error("Failed to process input image for video");
+
+      const veoRatio: '9:16' | '16:9' = aspectRatio === AspectRatio.Portrait ? '9:16' : '16:9';
+
       console.log("Starting Video Generation (Attempt)...");
 
       let operation = await ai.models.generateVideos({
@@ -591,9 +596,6 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
 
       return `${uri}&key=${import.meta.env.VITE_GEMINI_API_KEY}`;
     });
-
-
-
 
   } catch (error: any) {
     console.error("Video generation failed", error);

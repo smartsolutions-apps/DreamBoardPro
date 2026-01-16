@@ -1385,6 +1385,14 @@ function App() {
               <span className="hidden sm:inline">{currentView === 'editor' ? 'Studio' : 'Editor'}</span>
             </button>
 
+            <button
+              onClick={handleNewProject}
+              className="hidden sm:flex items-center gap-2 bg-red-50 text-red-600 border border-red-100 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition shadow-sm"
+            >
+              <Plus size={16} />
+              New Project
+            </button>
+
             <div className="flex items-center gap-3">
               {!user ? (
                 <button
@@ -1421,17 +1429,6 @@ function App() {
                 </div>
               )}
             </div>
-
-            {currentView === 'editor' && (
-              <button
-                onClick={exportToPdf}
-                disabled={scenes.length === 0 || isExporting}
-                className="hidden sm:flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-800 transition shadow-lg disabled:opacity-50"
-              >
-                {isExporting ? <RefreshCw size={16} className="animate-spin" /> : <FileDown size={16} />}
-                Export
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -1508,15 +1505,7 @@ function App() {
                 </div>
               ))}
 
-              <div
-                onClick={handleNewProject}
-                className="border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center p-8 cursor-pointer hover:border-brand-400 hover:bg-brand-50 transition-all group min-h-[200px]"
-              >
-                <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mb-4 group-hover:bg-brand-200 group-hover:text-brand-600 transition-colors">
-                  <Plus size={24} />
-                </div>
-                <span className="font-bold text-gray-400 group-hover:text-brand-600">Create New Project</span>
-              </div>
+
             </div>
           </div>
         )}
@@ -1699,6 +1688,15 @@ function App() {
                       className="flex items-center gap-1 text-xs font-bold text-amber-600 hover:bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 transition-colors bg-white"
                     >
                       <FileWarning size={16} /> Check Continuity
+                    </button>
+
+                    <button
+                      onClick={exportToPdf}
+                      disabled={isExporting}
+                      className="hidden sm:flex items-center gap-1 text-xs font-bold text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-lg border border-gray-200 transition-colors bg-white shadow-sm"
+                    >
+                      {isExporting ? <RefreshCw size={14} className="animate-spin" /> : <FileDown size={14} />}
+                      Export
                     </button>
 
                     <button

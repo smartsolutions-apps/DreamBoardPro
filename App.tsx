@@ -18,7 +18,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { analyzeScript, generateSceneImage, refineSceneImage, upscaleImage, checkContinuity, generateSceneVideo, generateNarration, autoTagScene, ContinuityIssue, STYLE_DEFINITIONS } from './services/geminiService';
 import { getAuthInstance, getOrCreateProject, uploadImageToStorage, saveSceneToFirestore, updateProjectThumbnail, getUserProjects, getProjectScenes, clearLocalDatabase, urlToBase64, uploadAudioToStorage, uploadVideoToStorage, saveProject, deleteFileFromStorage } from './services/firebase';
 import { logout, ensureAuthenticated, loginWithGoogle } from './services/auth';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 
 // Types
 import { ImageSize, AspectRatio, StoryScene, ColorMode, ArtStyle, SceneVersion, SceneTemplate, Project } from './types';
@@ -1287,6 +1287,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 relative font-sans">
+      <Toaster position="bottom-center" />
       <TemplateLibrary
         isOpen={isTemplatesOpen}
         onClose={() => setIsTemplatesOpen(false)}

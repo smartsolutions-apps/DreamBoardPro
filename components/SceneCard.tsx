@@ -70,6 +70,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   onRetryUpload
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(false); // NEW STATE
   const [showHistory, setShowHistory] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -78,7 +79,15 @@ export const SceneCard: React.FC<SceneCardProps> = ({
   const [isPreviewingTransition, setIsPreviewingTransition] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // TRIGGER LOADING WHEN URL CHANGES
+  React.useEffect(() => {
+    if (scene.imageUrl && !scene.videoUrl) {
+      setIsImageLoading(true);
+    }
+  }, [scene.imageUrl, scene.videoUrl]);
 
   const [editPrompt, setEditPrompt] = useState(scene.prompt);
   const [selectedShot, setSelectedShot] = useState<ShotType>(scene.shotType || ShotType.None);
@@ -290,15 +299,20 @@ export const SceneCard: React.FC<SceneCardProps> = ({
           }
         }}
       >
-        {scene.isLoading && !scene.imageUrl ? (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+        {/* COMBINED LOADING STATE: Scene Loading OR Image Loading */}
+        {(scene.isLoading || isImageLoading) && !scene.videoUrl ? (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 bg-gray-50/90 backdrop-blur-sm animate-fade-in">
             <div className="relative w-16 h-16 mb-4">
               <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
               <div className="absolute inset-0 border-4 border-t-brand-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
             </div>
-            <span className="text-sm font-bold text-brand-500 animate-pulse">Rendering Scene {index + 1}...</span>
+            <span className="text-xs font-bold text-brand-500 animate-pulse tracking-wide">
+              {scene.isLoading ? "Generating..." : "Rendering New Style..."}
+            </span>
           </div>
-        ) : scene.error && !scene.imageUrl ? (
+        ) : null}
+
+        {scene.error && !scene.imageUrl ? (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-gray-400 p-6 text-center bg-red-50/50">
             <AlertCircle size={32} className="mb-2 text-red-400" />
             <span className="text-sm text-red-500 font-medium">{scene.error}</span>
@@ -328,6 +342,7 @@ export const SceneCard: React.FC<SceneCardProps> = ({
                   crossOrigin="anonymous"
                   src={hoveredVersion || scene.imageUrl}
                   alt={scene.prompt}
+                  onLoad={() => setIsImageLoading(false)} // THE FIX: Turn off loading when real pixels arrive
                   className={`
                       w-full h-full object-cover transition-all duration-700 relative z-10
                       ${!hoveredVersion && FILTERS.find(f => f.id === scene.filter)?.class}

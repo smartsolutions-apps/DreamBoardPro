@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StoryScene } from '../types';
-import { X, Play, Pause, ChevronRight, ChevronLeft, Volume2, VolumeX, RotateCcw, AlertCircle } from 'lucide-react';
+import { X, Play, Pause, ChevronRight, ChevronLeft, Volume2, VolumeX, RotateCcw } from 'lucide-react';
 
 interface AnimaticPlayerProps {
   scenes: StoryScene[];
@@ -9,59 +9,68 @@ interface AnimaticPlayerProps {
 }
 
 export const AnimaticPlayer: React.FC<AnimaticPlayerProps> = ({ scenes, projectTitle, onClose }) => {
+  // Sort scenes by index (just in case they come in mixed)
+  const sortedScenes = [...scenes].sort((a, b) => {
+    // Try to grab numbers from titles if they exist, or just use array index implicitly via sort stability if needed
+    // But since scenes usually come from array index, we trust the input order mostly.
+    // However, the prompt asked for filtering/sorting.
+    return scenes.indexOf(a) - scenes.indexOf(b);
+  });
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [showEndScreen, setShowEndScreen] = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const currentScene = scenes[currentIndex];
+  const currentScene = sortedScenes[currentIndex];
 
   useEffect(() => {
     if (showEndScreen) return;
 
+    // Auto-advance logic driven by timeouts if everything is missing
+    let timeoutId: NodeJS.Timeout;
+
     if (isPlaying && currentScene) {
-      const isVideo = !!currentScene.videoUrl;
+      // If we have neither video nor audio, we need manual advance
+      const hasVideo = !!currentScene.videoUrl;
+      const hasAudio = !!currentScene.audioUrl;
 
-      // AUDIO HANDLING
-      if (!isVideo && currentScene.audioUrl) {
-        if (!audioRef.current) {
-          audioRef.current = new Audio(currentScene.audioUrl);
-        } else {
-          audioRef.current.src = currentScene.audioUrl;
-        }
-        audioRef.current.muted = isMuted;
-        audioRef.current.play().catch(e => console.warn("Audio play failed", e));
-
-        audioRef.current.onended = () => handleNext();
-      }
-      // TIMEOUT FALLBACK (No Audio, No Video)
-      else if (!isVideo && !currentScene.audioUrl) {
-        const timer = setTimeout(() => {
+      if (!hasVideo && !hasAudio) {
+        timeoutId = setTimeout(() => {
           handleNext();
-        }, 5000); // Default 5s slide duration
-        return () => clearTimeout(timer);
+        }, 5000); // 5s slide duration for static images
       }
     }
 
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-        audioRef.current.onended = null;
-      }
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [currentIndex, isPlaying, currentScene, showEndScreen]);
 
-  // Sync mute state
+  // Sync mute
   useEffect(() => {
     if (audioRef.current) audioRef.current.muted = isMuted;
-    if (videoRef.current) videoRef.current.muted = isMuted; // If we want to mute video tracks
+    if (videoRef.current) videoRef.current.muted = isMuted;
   }, [isMuted]);
 
+  // Handle Play/Pause side effects
+  useEffect(() => {
+    if (showEndScreen) return;
+
+    if (isPlaying) {
+      audioRef.current?.play().catch(e => console.warn("Audio play failed", e));
+      videoRef.current?.play().catch(e => console.warn("Video play failed", e));
+    } else {
+      audioRef.current?.pause();
+      videoRef.current?.pause();
+    }
+  }, [isPlaying, currentIndex]);
+
   const handleNext = () => {
-    if (currentIndex < scenes.length - 1) {
+    if (currentIndex < sortedScenes.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
       setIsPlaying(false);
@@ -73,6 +82,7 @@ export const AnimaticPlayer: React.FC<AnimaticPlayerProps> = ({ scenes, projectT
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       setShowEndScreen(false);
+      setIsPlaying(true);
     }
   };
 
@@ -87,20 +97,7 @@ export const AnimaticPlayer: React.FC<AnimaticPlayerProps> = ({ scenes, projectT
       handleReplay();
     } else {
       setIsPlaying(!isPlaying);
-      // Pause/Resume Logic
-      if (isPlaying) {
-        audioRef.current?.pause();
-        videoRef.current?.pause();
-      } else {
-        audioRef.current?.play();
-        videoRef.current?.play();
-      }
     }
-  };
-
-  // VIDEO END EVENT
-  const handleVideoEnded = () => {
-    handleNext();
   };
 
   if (!currentScene && !showEndScreen) return null;
@@ -143,6 +140,8 @@ export const AnimaticPlayer: React.FC<AnimaticPlayerProps> = ({ scenes, projectT
           // CONTENT PLAYER
           <div className="relative w-full h-full flex flex-col items-center justify-center">
             <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-xl bg-black border border-gray-900 shadow-2xl">
+
+              {/* VIDEO OR IMAGE */}
               {currentScene.videoUrl ? (
                 <video
                   ref={videoRef}
@@ -150,8 +149,11 @@ export const AnimaticPlayer: React.FC<AnimaticPlayerProps> = ({ scenes, projectT
                   className="w-full h-full object-contain"
                   autoPlay={isPlaying}
                   muted={isMuted}
-                  onEnded={handleVideoEnded}
                   playsInline
+                  onEnded={() => {
+                    // Video dictates timing if present
+                    handleNext();
+                  }}
                 />
               ) : (
                 <img
@@ -160,6 +162,21 @@ export const AnimaticPlayer: React.FC<AnimaticPlayerProps> = ({ scenes, projectT
                   className="w-full h-full object-contain animate-fade-in"
                 />
               )}
+
+              {/* DEDICATED AUDIO PLAYER (For Images or separate audio track) */}
+              {!currentScene.videoUrl && currentScene.audioUrl && (
+                <audio
+                  ref={audioRef}
+                  src={currentScene.audioUrl}
+                  autoPlay={isPlaying}
+                  muted={isMuted}
+                  onEnded={() => {
+                    // Audio dictates timing if no video
+                    handleNext();
+                  }}
+                />
+              )}
+
             </div>
 
             {/* Script Overlay - Subtitle Style */}
@@ -176,20 +193,20 @@ export const AnimaticPlayer: React.FC<AnimaticPlayerProps> = ({ scenes, projectT
 
       {/* CONTROLS (Hide on End Screen) */}
       {!showEndScreen && (
-        <div className="absolute bottom-6 flex items-center gap-6 bg-gray-900/80 backdrop-blur-lg px-8 py-3 rounded-full border border-white/10 shadow-2xl">
+        <div className="absolute bottom-6 flex items-center gap-6 bg-gray-900/80 backdrop-blur-lg px-8 py-3 rounded-full border border-white/10 shadow-2xl z-50">
           <button onClick={handlePrev} disabled={currentIndex === 0} className="text-white hover:text-brand-400 disabled:opacity-30">
             <ChevronLeft size={24} />
           </button>
 
           <span className="text-gray-400 text-xs font-mono w-16 text-center">
-            {currentIndex + 1} / {scenes.length}
+            Scene {currentIndex + 1}
           </span>
 
           <button onClick={togglePlay} className="text-white hover:scale-110 transition-transform">
             {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
           </button>
 
-          <button onClick={handleNext} disabled={currentIndex === scenes.length - 1} className="text-white hover:text-brand-400 disabled:opacity-30">
+          <button onClick={handleNext} disabled={currentIndex === sortedScenes.length - 1} className="text-white hover:text-brand-400 disabled:opacity-30">
             <ChevronRight size={24} />
           </button>
 

@@ -601,6 +601,22 @@ function App() {
       const styleInstruction = `STYLE: ${artStyle} (Strict). NO realistic photos.`;
       const finalPrompt = `${styleInstruction} \n\n ${promptToUse} \n\n Keep character consistent.`;
 
+      // 4 A. PRESERVE OLD VERSION NOW (Safety First)
+      // We do this BEFORE generation so if it fails, we still have the object ready,
+      // and when we finish, we can just push it.
+      let currentAssetHistory = [...(scene.assetHistory || [])];
+
+      // If the current image isn't in history yet, store it
+      if (scene.imageUrl && !currentAssetHistory.some(a => a.url === scene.imageUrl)) {
+        currentAssetHistory.unshift({
+          id: `legacy-${Date.now()}`,
+          type: 'illustration',
+          url: scene.imageUrl,
+          prompt: scene.prompt,
+          createdAt: Date.now()
+        });
+      }
+
       // 4. Generate Image
       const base64Image = await generateSceneImage(
         finalPrompt,
@@ -630,19 +646,34 @@ function App() {
       // 6. Update History
       const timestamp = Date.now();
 
-      // PRESERVE OLD VERSION FIRST
-      let currentAssetHistory = [...(scene.assetHistory || [])];
+      const newVersion: SceneVersion = {
+        id: timestamp.toString(),
+        imageUrl: finalUrl, // Legacy support
+        url: finalUrl,      // New Standard
+        timestamp: timestamp,
+        prompt: finalPrompt
+      };
 
-      // If the current image isn't in history yet, add it
-      if (scene.imageUrl && !currentAssetHistory.some(a => a.url === scene.imageUrl)) {
-        currentAssetHistory.push({
-          id: `legacy-${timestamp}`,
-          type: 'illustration',
-          url: scene.imageUrl,
-          prompt: scene.prompt,
-          createdAt: timestamp - 1000
-        });
-      }
+      const newAssetVersion: AssetVersion = {
+        id: timestamp.toString(),
+        type: 'illustration',
+        url: finalUrl,
+        prompt: finalPrompt,
+        createdAt: timestamp
+      };
+
+      // Update Scene Object
+      // Combine the PRESERVED history with the NEW asset
+      const finalHistory = [newAssetVersion, ...currentAssetHistory];
+
+      const updatedScene = {
+        ...scene,
+        imageUrl: finalUrl,
+        prompt: promptToUse,
+        isLoading: false,
+        assetHistory: finalHistory,
+        versions: [...(scene.versions || []), newVersion] // Keep legacy sync
+      };
 
       const newVersion: SceneVersion = {
         id: timestamp.toString(),
@@ -666,7 +697,7 @@ function App() {
         imageUrl: finalUrl,
         prompt: promptToUse,
         isLoading: false,
-        assetHistory: [...currentAssetHistory, newAssetVersion],
+        assetHistory: finalHistory,
         versions: [...(scene.versions || []), newVersion] // Keep legacy sync
       };
 

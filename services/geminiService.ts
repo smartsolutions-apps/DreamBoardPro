@@ -554,46 +554,47 @@ export const generateSceneVideo = async (imageUrl: string, prompt: string, aspec
 
     const veoRatio: '9:16' | '16:9' = aspectRatio === AspectRatio.Portrait ? '9:16' : '16:9';
 
-    console.log("Starting Video Generation...");
+    return await withRetry(async () => {
+      console.log("Starting Video Generation (Attempt)...");
 
-    let operation = await ai.models.generateVideos({
-      model: VIDEO_MODEL,
-      prompt: `Cinematic camera movement. ${cleanPromptText(prompt)}.
-      LIP SYNC INSTRUCTION: If the character is speaking in the script, they must have clear lip movement. If they are just listening or observing, keep mouth closed.
-      Make the animation smooth and realistic.`,
-      image: {
-        imageBytes: base64Data,
-        mimeType: 'image/png',
-      },
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: veoRatio
+      let operation = await ai.models.generateVideos({
+        model: VIDEO_MODEL,
+        prompt: `Cinematic camera movement. ${cleanPromptText(prompt)}.
+        LIP SYNC INSTRUCTION: If the character is speaking in the script, they must have clear lip movement. If they are just listening or observing, keep mouth closed.
+        Make the animation smooth and realistic.`,
+        image: {
+          imageBytes: base64Data,
+          mimeType: 'image/png',
+        },
+        config: {
+          numberOfVideos: 1,
+          resolution: '720p',
+          aspectRatio: veoRatio
+        }
+      });
+
+      // Polling Loop inside retry
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (!operation.done) {
+        if (attempts > maxAttempts) throw new Error("Video generation timed out.");
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        operation = await ai.operations.getVideosOperation({ operation: operation });
+        attempts++;
       }
+
+      if (operation.error) throw new Error(operation.error.message || "Unknown Video Generation Error");
+
+      const uri = operation.response?.generatedVideos?.[0]?.video?.uri;
+      if (!uri) throw new Error("No video URI returned");
+
+      return `${uri}&key=${import.meta.env.VITE_GEMINI_API_KEY}`;
     });
 
-    // Safety timeout loop (max 5 minutes)
-    let attempts = 0;
-    const maxAttempts = 30; // 30 * 10000ms = 300 seconds (5 minutes)
 
-    while (!operation.done) {
-      if (attempts > maxAttempts) throw new Error("Video generation timed out. Please try again.");
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      operation = await ai.operations.getVideosOperation({ operation: operation });
-      attempts++;
-    }
 
-    console.log("Video Operation Complete:", operation);
 
-    if (operation.error) {
-      throw new Error(operation.error.message || "Unknown Video Generation Error");
-    }
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Video generation failed: No download URI returned.");
-
-    // CRITICAL FIX: Append the correct API_KEY.
-    return `${downloadLink}&key=${import.meta.env.VITE_GEMINI_API_KEY}`;
   } catch (error: any) {
     console.error("Video generation failed", error);
 
